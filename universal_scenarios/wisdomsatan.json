@@ -1,0 +1,62 @@
+{
+  "name": "wisdomsatan",
+  "url": "https://api.wisdomsatan.club/register?aff=kiW4",
+  "steps": [
+    {
+      "action": "fill",
+      "selectors": [
+        "main input[type=text]",
+        "input[name=username]"
+      ],
+      "value": "{login}"
+    },
+    {
+      "action": "fill",
+      "selectors": [
+        "main input[type=password] >> nth=0",
+        "input[name=password]"
+      ],
+      "value": "{password}"
+    },
+    {
+      "action": "fill",
+      "selectors": [
+        "#password2",
+        "main input[type=password] >> nth=1",
+        "input[name=password2]"
+      ],
+      "value": "{password_confirm}"
+    },
+    {
+      "action": "click",
+      "selectors": [
+        ".semi-checkbox-inner-display",
+        "input[type=checkbox]"
+      ],
+      "force": true
+    },
+    {
+      "action": "wait_visible",
+      "selectors": [
+        "button[type=submit]",
+        "main button"
+      ]
+    }
+  ],
+  "submit": [
+    {
+      "action": "click",
+      "selectors": [
+        "button[type=submit]",
+        "main button"
+      ]
+    }
+  ],
+  "success": [
+    {
+      "action": "wait_url",
+      "url": "**/login**",
+      "timeout_ms": 30000
+    }
+  ]
+}

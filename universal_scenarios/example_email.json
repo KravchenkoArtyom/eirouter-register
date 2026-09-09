@@ -1,0 +1,14 @@
+{
+  "name": "example-email-form",
+  "hidden": true,
+  "url": "https://example.com/register",
+  "steps": [
+    {"action": "fill", "selectors": ["input[type=email]", "input[name=email]", "#email"], "value": "{email}"},
+    {"action": "fill", "selectors": ["input[name=password]", "#password"], "value": "{password}"},
+    {"action": "fill", "selectors": ["input[name=password_confirmation]", "#password-confirm"], "value": "{password_confirm}"},
+    {"action": "check", "selectors": ["input[type=checkbox]", ".terms input"]}
+  ],
+  "submit": [
+    {"action": "click", "selectors": ["button[type=submit]", "button:has-text('Register')"]}
+  ]
+}

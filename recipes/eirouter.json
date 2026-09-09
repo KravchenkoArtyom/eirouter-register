@@ -1,0 +1,11 @@
+{
+  "name": "eirouter",
+  "provider": "eirouter",
+  "description": "Email verification form; sending, Cloudflare waiting and key capture are handled by the provider.",
+  "vars": {},
+  "steps": [
+    {"action": "type", "selector": "#reg-code", "text": "{code}", "delay_ms": 35},
+    {"action": "type", "selector": "#reg-password", "text": "{password}", "delay_ms": 35},
+    {"action": "check", "selector": "#reg-terms"}
+  ]
+}

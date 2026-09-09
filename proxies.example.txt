@@ -1,0 +1,4 @@
+# Copy to proxies.txt and add your proxy addresses, one per line.
+# HTTP CONNECT proxies are supported, optionally with authentication.
+# http://username:password@hostname:port
+# http://hostname:port
