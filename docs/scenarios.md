@@ -1,0 +1,80 @@
+# Сценарии сайтов
+
+Один сайт — один JSON в `universal_scenarios/`. Файлы с именем на `_`
+служебные и в списке не показываются (там же `_trash/` — корзина).
+
+```json
+{
+  "name": "my-site",
+  "url": "https://site.test/register",
+  "mail": "tmail",
+  "steps": [ ... ],
+  "verification": { "send": [...], "wait": [...], "complete": [...] },
+  "submit": [ ... ],
+  "success": [ ... ]
+}
+```
+
+Порядок исполнения: `steps` → `verification.send/wait/complete` → `submit` →
+`success`. Аккаунт считается зарегистрированным после `success`.
+
+Поле `mail` — подсказка для режима «По сценарию (авто)» в панели:
+`none`, `tmail` (он же `wibucrypto`), `mail.tm` или имя своего сервиса из
+`mail_services/` (см. [mail-services.md](mail-services.md)).
+`hidden: true` скрывает сценарий-пример из списков.
+
+Необязательные разделы `delays` и `captcha` задают паузы и поведение при
+капче для этого сценария, если панель не передала свои:
+
+```json
+"delays": {"step_min_ms": 300, "step_max_ms": 900, "account_min_s": 20, "account_max_s": 60},
+"captcha": {"enabled": true, "mode": "wait", "timeout": 300, "selectors": ["#my-captcha"]}
+```
+
+Подробности — [delays-and-captcha.md](delays-and-captcha.md).
+
+## Шаг
+
+```json
+{"action": "fill", "selectors": ["input[type=email]", "#email"], "value": "{email}"}
+```
+
+- `selector` или `selectors` — список в порядке приоритета: первый найденный
+  видимый элемент и используется;
+- `timeout_ms` — сколько ждать элемент (по умолчанию 10000);
+- `note` — заметка для себя, на запуск не влияет.
+
+Подстановки в текстовых значениях: `{email}`, `{login}`, `{username}`,
+`{password}`, `{password_confirm}`, `{code}`, `{link}`. Неизвестная подстановка
+остаётся текстом и шаг не ломает.
+
+## Действия
+
+| Группа | Действие | Что делает |
+| --- | --- | --- |
+| Форма | `fill` | вписать значение |
+| | `type` | набрать посимвольно (`delay_ms`) |
+| | `click` | клик (`force`) |
+| | `check` / `uncheck` | чекбокс |
+| | `select` | выбрать опцию (`value`) |
+| | `press` | нажать клавишу (`key`) |
+| Ожидание | `wait` | пауза (`seconds`) |
+| | `wait_visible` | дождаться элемента |
+| | `wait_url` | дождаться адреса (`url`, `timeout_ms`) |
+| | `goto` | перейти по адресу (`url`) |
+| DOM | `dom` | правка страницы: `remove`, `set_attribute`, `set_html`, `insert_html`, `append_html`, `prepend_html`, `set_text` |
+| Почта | `mail_create`, `mail_wait_code`, `mail_wait_link`, `mail_open_link`, `mail_refresh` | см. [mail-actions.md](mail-actions.md) |
+| Капча и уведомления | `captcha_wait` | ждать, пока человек решит проверку (`timeout`, `message`) |
+| | `wait_random` | случайная пауза (`min_seconds`, `max_seconds`) |
+| | `notify` | сообщение в лог и в панель (`message`, `level`) |
+
+Правки DOM действуют только в текущем запуске и не меняют сам сайт.
+
+Каталог действий живёт в `universal/actions.py`: оттуда его берут раннер,
+валидатор и форма шага в панели. Новое действие добавляется в каталог и в
+`universal/runner.py` — разметку панели править не нужно.
+
+Раннер не обходит CAPTCHA и другие проверки доступа. Он их замечает сам:
+сценарий встаёт на паузу, сверху панели появляется полоса со звуком и
+кнопками «Я решил», «Пропустить аккаунт», «Остановить запуск». Решите
+проверку в видимом окне браузера — сценарий продолжится.

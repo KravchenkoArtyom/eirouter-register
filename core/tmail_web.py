@@ -197,6 +197,10 @@ class TmailWebClient:
             pass
         return False
 
+    async def refresh(self):
+        """Публичное обновление ящика: используется шагом mail_refresh."""
+        return await self._click_refresh()
+
     async def _scan_dom_for_link(self):
         # только вкладка tmail: на странице регистрации есть свои legal-ссылки
         # (Privacy Policy и т.п.) - они не являются ссылкой подтверждения

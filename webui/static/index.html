@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Регистратор — панель</title>
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div class="head-stack">
+<header class="topbar">
+  <div class="brand">
+    <span class="status-dot" id="health" title="Связь с сервером"></span>
+    <span class="brand-name">Регистратор</span>
+  </div>
+  <nav class="views" id="viewNav">
+    <button data-view="overview" class="on">Обзор</button>
+    <button data-view="run">Запуск</button>
+    <button data-view="scenario">Сценарий</button>
+    <button data-view="mail">Почта</button>
+    <button data-view="proxy">Прокси</button>
+    <button data-view="inspector">Инспектор</button>
+    <button data-view="accounts">Аккаунты</button>
+  </nav>
+  <div class="theme tabs" id="themeSwitch" role="group" aria-label="Тема оформления">
+    <button data-theme-choice="auto">Авто</button>
+    <button data-theme-choice="light">Светлая</button>
+    <button data-theme-choice="dark">Тёмная</button>
+  </div>
+  <div class="meta" id="envStatus"></div>
+</header>
+
+<!-- Капча: единственное место, где программа зовёт человека немедленно. -->
+<div id="captchaBar" class="banner" hidden>
+  <div class="banner-text">
+    <b id="captchaTitle">Капча на экране</b>
+    <span id="captchaDetail" class="hint"></span>
+  </div>
+  <div class="actions tight">
+    <button id="btnCaptchaDone" class="primary small">Я решил, продолжай</button>
+    <button id="btnCaptchaSkip" class="quiet small">Пропустить аккаунт</button>
+    <button id="btnCaptchaStop" class="quiet small">Остановить запуск</button>
+  </div>
+</div>
+</div>
+
+<main>
+  <!-- ========== Обзор ========== -->
+  <section class="view on" data-view="overview">
+    <article class="card">
+      <div class="card-head">
+        <h2>Как это работает</h2>
+        <span class="hint">Схема одного запуска: от кнопки «Запустить» до строки в файле аккаунтов.</span>
+      </div>
+      <img class="diagram" src="/static/how-it-works.svg" alt="Схема работы регистратора">
+      <div class="columns">
+        <div>
+          <h3>Пять частей</h3>
+          <ol class="numbered">
+            <li><b>Панель</b> — то, что вы видите: запуск, сценарии, почта, прокси, инспектор.</li>
+            <li><b>Сценарий</b> — список шагов для одного сайта: что заполнить, куда нажать, чего дождаться.</li>
+            <li><b>Браузер</b> — обычный Chrome или профиль AdsPower; окно видно, всё происходит на ваших глазах.</li>
+            <li><b>Почта</b> — ящик для писем: встроенные tmail и Mail.tm или свой сервис, описанный шагами.</li>
+            <li><b>Результат</b> — строка в <span class="mono">universal_accounts.json</span>: адрес, пароль, статус.</li>
+          </ol>
+        </div>
+        <div>
+          <h3>Что делает человек</h3>
+          <ul class="plain">
+            <li><b>Капча.</b> Программа её не решает: она замечает проверку, ставит сценарий на паузу и зовёт вас — сверху появится полоса с кнопкой «Я решил».</li>
+            <li><b>Новый сайт.</b> Селекторы удобнее снимать инспектором: наведение подсвечивает элемент, клик забирает селектор, Shift+клик кладёт в буфер.</li>
+            <li><b>Прокси.</b> Список хранится в файле; панель умеет его редактировать, проверять и раздавать аккаунтам по правилу ротации.</li>
+          </ul>
+        </div>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h2>С чего начать</h2>
+        <button id="btnChecklist" class="quiet small">Обновить</button>
+      </div>
+      <div id="checklist" class="checklist"></div>
+    </article>
+  </section>
+
+  <!-- ========== Запуск ========== -->
+  <section class="view" data-view="run">
+    <div class="columns">
+      <article class="card">
+        <h2>Запуск регистрации</h2>
+        <div class="field">
+          <label for="runScenario">Сценарий</label>
+          <select id="runScenario"></select>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="runCount">Аккаунтов</label>
+            <input type="number" id="runCount" value="1" min="1" max="1000">
+          </div>
+          <div class="field">
+            <label for="runMail">Почта</label>
+            <select id="runMail"></select>
+          </div>
+          <div class="field">
+            <label for="runBrowser">Браузер</label>
+            <select id="runBrowser">
+              <option value="auto">Авто</option>
+              <option value="chrome">Chrome</option>
+              <option value="adspower">AdsPower</option>
+            </select>
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="runProxy">Сеть</label>
+            <select id="runProxy">
+              <option value="direct">Напрямую</option>
+              <option value="file">Список из файла</option>
+              <option value="single">Один прокси вручную</option>
+            </select>
+          </div>
+          <div class="field grow" id="runProxyOne" hidden>
+            <label for="runProxyValue">Адрес прокси</label>
+            <input type="text" id="runProxyValue" placeholder="http://user:pass@host:port">
+          </div>
+          <div class="field" id="runRotationWrap">
+            <label for="runRotation">Ротация</label>
+            <select id="runRotation"></select>
+          </div>
+        </div>
+        <p class="hint" id="runProxyHint"></p>
+        <div class="actions">
+          <button id="btnStart" class="primary">Запустить</button>
+          <button id="btnStop" class="quiet" disabled>Остановить</button>
+          <span class="hint">Ctrl+Enter — запустить</span>
+        </div>
+        <div class="progress"><i id="runProgressBar"></i></div>
+        <p class="hint" id="runStatus">Активного запуска нет.</p>
+        <div id="runProxyState" class="proxy-state"></div>
+      </article>
+
+      <article class="card">
+        <h2>Лог запуска</h2>
+        <div class="actions tight">
+          <button id="btnClearLog" class="quiet small">Очистить вид</button>
+          <label class="checkbox"><input type="checkbox" id="autoscroll" checked> автопрокрутка</label>
+        </div>
+        <pre id="log" class="log"></pre>
+        <div id="notices" class="notices"></div>
+      </article>
+    </div>
+
+    <article class="card">
+      <div class="card-head">
+        <h2>Задержки, капча и уведомления</h2>
+        <span class="hint">Сохраняются на этой машине и подставляются в каждый запуск.</span>
+      </div>
+      <div class="columns">
+        <div>
+          <h3>Задержки</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="setStepMin">Перед шагом, от (мс)</label>
+              <input type="number" id="setStepMin" min="0" step="50">
+            </div>
+            <div class="field">
+              <label for="setStepMax">Перед шагом, до (мс)</label>
+              <input type="number" id="setStepMax" min="0" step="50">
+            </div>
+            <div class="field">
+              <label for="setClickExtra">Добавка на клик (мс)</label>
+              <input type="number" id="setClickExtra" min="0" step="50">
+            </div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="setAccountMin">Между аккаунтами, от (с)</label>
+              <input type="number" id="setAccountMin" min="0">
+            </div>
+            <div class="field">
+              <label for="setAccountMax">Между аккаунтами, до (с)</label>
+              <input type="number" id="setAccountMax" min="0">
+            </div>
+            <div class="field">
+              <label for="setAfterCaptcha">Пауза после капчи (с)</label>
+              <input type="number" id="setAfterCaptcha" min="0">
+            </div>
+          </div>
+          <p class="hint">Пауза перед шагом берётся случайно из диапазона, поэтому ритм не выглядит машинным.</p>
+        </div>
+        <div>
+          <h3>Капча</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="setCaptchaMode">Что делать</label>
+              <select id="setCaptchaMode">
+                <option value="wait">ждать человека</option>
+                <option value="pause">выждать паузу и продолжить</option>
+                <option value="stop">пропустить аккаунт</option>
+                <option value="log">только записать в лог</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="setCaptchaTimeout">Ждать не дольше, с</label>
+              <input type="number" id="setCaptchaTimeout" min="0">
+            </div>
+            <div class="field">
+              <label for="setCaptchaPause">Пауза для режима «выждать», с</label>
+              <input type="number" id="setCaptchaPause" min="0">
+            </div>
+          </div>
+          <div class="field">
+            <label for="setCaptchaSelectors">Свои признаки капчи (селекторы через запятую)</label>
+            <input type="text" id="setCaptchaSelectors" placeholder="#my-captcha, .challenge">
+          </div>
+          <div class="actions tight">
+            <label class="checkbox"><input type="checkbox" id="setCaptchaEnabled"> следить за капчей</label>
+            <label class="checkbox"><input type="checkbox" id="setCaptchaText"> искать по тексту «я не робот»</label>
+          </div>
+          <div class="actions tight">
+            <label class="checkbox"><input type="checkbox" id="setSound"> звук при капче</label>
+            <label class="checkbox"><input type="checkbox" id="setDesktop"> системное уведомление</label>
+          </div>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btnSaveSettings" class="primary small">Сохранить настройки</button>
+        <button id="btnResetSettings" class="quiet small">Вернуть значения по умолчанию</button>
+        <span class="hint" id="settingsState"></span>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== Сценарий ========== -->
+  <section class="view" data-view="scenario">
+    <article class="card">
+      <div class="card-head">
+        <h2>Сценарии</h2>
+        <span class="hint">Один сайт — один сценарий. Ctrl+S сохраняет.</span>
+      </div>
+      <div class="actions tight">
+        <select id="edScenario" class="pick"></select>
+        <button id="btnNewScenario" class="quiet small">Новый</button>
+        <button id="btnCopyScenario" class="quiet small">Дублировать</button>
+        <button id="btnDeleteScenario" class="quiet small">Удалить</button>
+        <button id="btnReloadScenarios" class="quiet small">Обновить список</button>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="edName">Название</label>
+          <input type="text" id="edName" placeholder="my-site">
+        </div>
+        <div class="field grow">
+          <label for="edUrl">Адрес страницы регистрации</label>
+          <input type="text" id="edUrl" placeholder="https://site.test/register">
+        </div>
+        <div class="field">
+          <label for="edMail">Почта по умолчанию</label>
+          <select id="edMail"></select>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btnSaveScenario" class="primary small">Сохранить сценарий</button>
+        <button id="btnValidate" class="quiet small">Проверить</button>
+        <span class="hint" id="edDirty"></span>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="card-head">
+        <h2>Шаги</h2>
+        <div class="tabs" id="sectionTabs"></div>
+      </div>
+      <p class="hint" id="sectionHint"></p>
+      <div class="columns steps-layout">
+        <div>
+          <ol class="steps" id="stepList"></ol>
+          <div class="actions tight">
+            <button id="btnStepUp" class="quiet small">Вверх</button>
+            <button id="btnStepDown" class="quiet small">Вниз</button>
+            <button id="btnStepDuplicate" class="quiet small">Копия</button>
+            <button id="btnStepDelete" class="quiet small">Удалить</button>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label for="newAction">Добавить шаг</label>
+            <select id="newAction"></select>
+          </div>
+          <div class="actions tight">
+            <button id="btnAddAfter" class="quiet small">После выбранного</button>
+            <button id="btnAddEnd" class="quiet small">В конец секции</button>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label for="moveSection">Перенести шаг в секцию</label>
+            <select id="moveSection"></select>
+          </div>
+          <div class="actions tight">
+            <button id="btnStepMove" class="quiet small">Перенести</button>
+          </div>
+        </div>
+        <div>
+          <div id="stepForm" class="step-form"></div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== Почта ========== -->
+  <section class="view" data-view="mail">
+    <article class="card">
+      <div class="card-head">
+        <h2>Почтовые сервисы</h2>
+        <span class="hint">Встроенные работают сразу; свой сервис описывается шагами — как сценарий сайта.</span>
+      </div>
+      <div id="mailList" class="service-list"></div>
+      <div class="actions tight">
+        <select id="mailPick" class="pick"></select>
+        <button id="btnMailNew" class="quiet small">Добавить сервис</button>
+        <button id="btnMailCopy" class="quiet small">Дублировать</button>
+        <button id="btnMailDelete" class="quiet small">Удалить</button>
+        <button id="btnMailReload" class="quiet small">Обновить список</button>
+      </div>
+    </article>
+
+    <article class="card" id="mailEditor" hidden>
+      <div class="card-head">
+        <h2>Описание сервиса</h2>
+        <span class="hint" id="mailFile"></span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="mailName">Имя (id)</label>
+          <input type="text" id="mailName" placeholder="my-temp-mail">
+        </div>
+        <div class="field">
+          <label for="mailLabel">Как показывать</label>
+          <input type="text" id="mailLabel" placeholder="My Temp Mail">
+        </div>
+        <div class="field grow">
+          <label for="mailUrl">Адрес страницы почты</label>
+          <input type="text" id="mailUrl" placeholder="https://mail.test/inbox">
+        </div>
+        <div class="field">
+          <label for="mailPoll">Опрос ящика, с</label>
+          <input type="number" id="mailPoll" min="1" max="60">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="mailAddressSource">Откуда брать адрес</label>
+          <select id="mailAddressSource">
+            <option value="value">значение поля (input)</option>
+            <option value="text">текст элемента</option>
+            <option value="attribute">атрибут элемента</option>
+            <option value="clipboard">кнопка «Копировать»</option>
+            <option value="page">поиск по тексту страницы</option>
+          </select>
+        </div>
+        <div class="field grow">
+          <label for="mailAddressSelectors">Селекторы адреса (по одному в строке)</label>
+          <textarea id="mailAddressSelectors" rows="2" placeholder="#address"></textarea>
+        </div>
+        <div class="field">
+          <label for="mailAddressAttribute">Имя атрибута</label>
+          <input type="text" id="mailAddressAttribute" placeholder="data-mail">
+        </div>
+        <div class="field">
+          <label for="mailAddressTimeout">Ждать адрес, с</label>
+          <input type="number" id="mailAddressTimeout" min="5" max="600">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="mailCodeLength">Длина кода</label>
+          <input type="number" id="mailCodeLength" min="3" max="12">
+        </div>
+        <div class="field grow">
+          <label for="mailCodeKeywords">Слова перед кодом (через запятую)</label>
+          <input type="text" id="mailCodeKeywords" placeholder="code, код">
+        </div>
+        <div class="field grow">
+          <label for="mailLinkKeywords">Слова в ссылке подтверждения</label>
+          <input type="text" id="mailLinkKeywords" placeholder="verify, confirm">
+        </div>
+        <div class="field grow">
+          <label for="mailLinkExclude">Ссылки-исключения</label>
+          <input type="text" id="mailLinkExclude" placeholder="privacy, terms">
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btnMailSave" class="primary small">Сохранить сервис</button>
+        <button id="btnMailValidate" class="quiet small">Проверить</button>
+        <button id="btnMailInspect" class="quiet small">Открыть в инспекторе</button>
+        <span class="hint" id="mailDirty"></span>
+      </div>
+      <div class="divider"></div>
+      <div class="card-head">
+        <h3>Шаги сервиса</h3>
+        <div class="tabs" id="mailSectionTabs"></div>
+      </div>
+      <p class="hint" id="mailSectionHint"></p>
+      <div class="columns steps-layout">
+        <div>
+          <ol class="steps" id="mailStepList"></ol>
+          <div class="actions tight">
+            <button id="btnMailStepUp" class="quiet small">Вверх</button>
+            <button id="btnMailStepDown" class="quiet small">Вниз</button>
+            <button id="btnMailStepDuplicate" class="quiet small">Копия</button>
+            <button id="btnMailStepDelete" class="quiet small">Удалить</button>
+          </div>
+          <div class="divider"></div>
+          <div class="field">
+            <label for="mailNewAction">Добавить шаг</label>
+            <select id="mailNewAction"></select>
+          </div>
+          <div class="actions tight">
+            <button id="btnMailAddAfter" class="quiet small">После выбранного</button>
+            <button id="btnMailAddEnd" class="quiet small">В конец секции</button>
+          </div>
+        </div>
+        <div>
+          <div id="mailStepForm" class="step-form"></div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== Прокси ========== -->
+  <section class="view" data-view="proxy">
+    <article class="card">
+      <div class="card-head">
+        <h2>Прокси</h2>
+        <span class="hint" id="proxyFile"></span>
+      </div>
+      <div id="proxyDrop" class="drop">
+        Перетащите сюда файл со списком или
+        <label class="link-label">выберите файл<input type="file" id="proxyFileInput" accept=".txt,.csv,text/plain" hidden></label>.
+        Формат строки: <span class="mono">http://user:pass@host:port</span> — по одному в строке, «#» — комментарий.
+      </div>
+      <div class="field">
+        <label for="proxyText">Список прокси</label>
+        <textarea id="proxyText" rows="8" spellcheck="false" placeholder="http://user:pass@host:8080"></textarea>
+      </div>
+      <div class="actions">
+        <button id="btnProxySave" class="primary small">Сохранить список</button>
+        <button id="btnProxyCheck" class="quiet small">Проверить связь</button>
+        <button id="btnProxyReload" class="quiet small">Перечитать файл</button>
+        <button id="btnProxyClear" class="quiet small">Очистить</button>
+        <span class="hint" id="proxyState"></span>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="proxyRotation">Ротация между аккаунтами</label>
+          <select id="proxyRotation"></select>
+        </div>
+        <div class="field">
+          <label for="proxyBanAfter">Убирать из очереди после N неудач</label>
+          <input type="number" id="proxyBanAfter" min="0" max="20">
+        </div>
+        <div class="field">
+          <label>&nbsp;</label>
+          <button id="btnProxySaveRotation" class="quiet small">Запомнить правило</button>
+        </div>
+      </div>
+      <div id="proxyResults"></div>
+    </article>
+  </section>
+
+  <!-- ========== Инспектор ========== -->
+  <section class="view" data-view="inspector">
+    <article class="card">
+      <div class="card-head">
+        <h2>Инспектор страницы</h2>
+        <div class="tabs" id="inspectModes">
+          <button data-mode="mirror" class="on">Зеркало</button>
+          <button data-mode="shot">Кадр</button>
+        </div>
+      </div>
+      <div class="actions tight">
+        <input type="text" id="inUrl" class="grow" placeholder="https://… (пусто — адрес сценария)">
+        <button id="btnInspectOpen" class="primary small">Открыть</button>
+        <button id="btnMirrorReload" class="quiet small" disabled>Обновить</button>
+        <button id="btnInspectClose" class="quiet small" disabled>Закрыть</button>
+      </div>
+      <p class="hint" id="inspectStatus">Страница откроется в браузере на этой машине и покажется здесь.
+        Наведите курсор — элемент подсветится, клик — заберёт селектор, Shift+клик — сразу в буфер.</p>
+      <div class="inspector-layout">
+        <div class="stage">
+          <div class="stage-bar"><span id="inspectUrl" class="mono"></span><span id="inspectHover" class="mono muted"></span></div>
+          <iframe id="mirror" title="Зеркало страницы"></iframe>
+          <img id="shot" alt="Кадр страницы" hidden>
+        </div>
+        <aside class="side">
+          <section class="panel">
+            <h3>Элемент</h3>
+            <p class="hint" id="elementInfo">Элемент не выбран.</p>
+            <div class="candidates" id="candList"></div>
+            <div class="field">
+              <label for="pickSelector">Селектор</label>
+              <input type="text" id="pickSelector" class="mono">
+            </div>
+            <div class="field-row">
+              <div class="field">
+                <label for="pickAction">Действие</label>
+                <select id="pickAction"></select>
+              </div>
+              <div class="field grow">
+                <label for="pickValue">Значение</label>
+                <input type="text" id="pickValue" placeholder="{email}">
+              </div>
+            </div>
+            <div class="actions tight">
+              <button id="btnVerify" class="quiet small">Проверить</button>
+              <button id="btnToBuffer" class="quiet small">В буфер</button>
+              <button id="btnToStep" class="quiet small">В выбранный шаг</button>
+              <button id="btnNewStep" class="primary small">Новым шагом</button>
+            </div>
+            <p class="hint" id="verifyResult"></p>
+            <div class="field-row">
+              <div class="field">
+                <label for="targetSection">Куда добавлять шаги</label>
+                <select id="targetSection"></select>
+              </div>
+              <div class="field">
+                <label for="insertMode">Место</label>
+                <select id="insertMode">
+                  <option value="end">в конец</option>
+                  <option value="after">после выбранного</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <h3>Буфер элементов</h3>
+              <div class="actions tight">
+                <button id="btnBufferAll" class="quiet small">Все в шаги</button>
+                <button id="btnBufferClear" class="quiet small">Очистить</button>
+              </div>
+            </div>
+            <div id="bufferList" class="buffer"></div>
+          </section>
+
+          <section class="panel">
+            <h3>Действие на настоящей странице</h3>
+            <p class="hint">Продвиньте состояние сайта (открыть вкладку формы, принять баннер) и обновите зеркало.</p>
+            <div class="field-row">
+              <div class="field">
+                <label for="actAction">Что сделать</label>
+                <select id="actAction">
+                  <option value="click">click по селектору</option>
+                  <option value="fill">fill по селектору</option>
+                  <option value="press">press по селектору</option>
+                  <option value="check">check по селектору</option>
+                  <option value="scroll">прокрутить</option>
+                  <option value="reload">перезагрузить</option>
+                  <option value="back">назад</option>
+                </select>
+              </div>
+              <div class="field grow">
+                <label for="actValue">Значение</label>
+                <input type="text" id="actValue" placeholder="Enter / 600 / текст">
+              </div>
+            </div>
+            <div class="actions tight">
+              <button id="btnAct" class="quiet small">Выполнить и обновить</button>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </article>
+  </section>
+
+  <!-- ========== Аккаунты ========== -->
+  <section class="view" data-view="accounts">
+    <article class="card">
+      <div class="card-head">
+        <h2>Аккаунты</h2>
+        <button id="btnAccounts" class="quiet small">Обновить</button>
+      </div>
+      <div id="accounts"><p class="hint">Нажмите «Обновить».</p></div>
+    </article>
+  </section>
+</main>
+
+<dialog id="dlgNew">
+  <form method="dialog" class="dialog-body">
+    <h2>Новый сценарий</h2>
+    <div class="field">
+      <label for="newName">Название</label>
+      <input type="text" id="newName" placeholder="my-site" required>
+    </div>
+    <div class="field">
+      <label for="newUrl">Адрес страницы регистрации</label>
+      <input type="text" id="newUrl" placeholder="https://site.test/register">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label for="newMail">Почта по умолчанию</label>
+        <select id="newMail"></select>
+      </div>
+      <div class="field grow">
+        <label for="newTemplate">Заготовка шагов</label>
+        <select id="newTemplate"></select>
+      </div>
+    </div>
+    <p class="hint" id="newCopyHint" hidden></p>
+    <div class="actions right">
+      <button value="cancel" class="quiet small">Отмена</button>
+      <button value="create" class="primary small" id="btnCreateScenario">Создать</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlgMailNew">
+  <form method="dialog" class="dialog-body">
+    <h2>Новый почтовый сервис</h2>
+    <div class="field">
+      <label for="mailNewName">Имя (латиницей, станет id)</label>
+      <input type="text" id="mailNewName" placeholder="my-temp-mail" required>
+    </div>
+    <div class="field">
+      <label for="mailNewUrl">Адрес страницы почты</label>
+      <input type="text" id="mailNewUrl" placeholder="https://mail.test/inbox">
+    </div>
+    <div class="field">
+      <label for="mailNewTemplate">Заготовка шагов</label>
+      <select id="mailNewTemplate"></select>
+    </div>
+    <p class="hint" id="mailNewCopyHint" hidden></p>
+    <div class="actions right">
+      <button value="cancel" class="quiet small">Отмена</button>
+      <button value="create" class="primary small">Создать</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toasts"></div>
+<script src="/static/js/main.js" type="module"></script>
+</body>
+</html>

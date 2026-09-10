@@ -1,0 +1,32 @@
+{
+  "name": "example-temp-mail",
+  "label": "Пример: сайт временной почты",
+  "url": "https://mail.example/inbox",
+  "poll_interval": 3,
+  "address": {
+    "source": "value",
+    "selectors": ["#address", "input[readonly]"],
+    "attribute": "",
+    "timeout": 60
+  },
+  "code": {
+    "length": 6,
+    "keywords": "code, код, verification"
+  },
+  "link": {
+    "keywords": "verify, confirm, activate",
+    "exclude": "privacy, terms, unsubscribe"
+  },
+  "create": [
+    {"action": "click", "selectors": ["button:has-text('Создать')", "button:has-text('Create')"],
+     "note": "кнопка, которая выдаёт новый ящик"},
+    {"action": "wait_visible", "selectors": ["#address"], "timeout_ms": 15000}
+  ],
+  "refresh": [
+    {"action": "click", "selectors": ["button:has-text('Обновить')", "button:has-text('Refresh')"]}
+  ],
+  "open_message": [
+    {"action": "click", "selectors": [".mail-item", ".message-item"], "timeout_ms": 2000,
+     "note": "первое письмо в списке; пусто — читаем прямо из списка"}
+  ]
+}

@@ -1,6 +1,8 @@
 """Mail.tm mailbox API used by the eirouter registration flow."""
 
 import asyncio
+import html as html_module
+import re
 import secrets
 import time
 from collections.abc import Callable
@@ -13,6 +15,7 @@ from core.tmail_web import TmailWebClient
 
 class MailTmClient:
     BASE_URL = "https://api.mail.tm"
+    LINK_PATTERN = re.compile(r"https?://[^\s\"'<>]+")
     USERNAME_ADJECTIVES = (
         "amber", "brisk", "calm", "clever", "cosmic", "fresh", "hidden",
         "lucky", "rapid", "silver", "smart", "steady", "sunny", "urban",
@@ -147,3 +150,40 @@ class MailTmClient:
                         return code
                 await asyncio.sleep(interval)
         raise TimeoutError("eirouter verification email did not arrive")
+
+    async def refresh(self) -> None:
+        """API-клиенту обновление не нужно: список писем запрашивается каждый раз."""
+        return None
+
+    async def wait_for_link(self, timeout: float = 300, keywords=("verify",),
+                            interval: float = 3) -> str:
+        """Ждать письмо со ссылкой подтверждения и вернуть первую подходящую.
+
+        Универсальные сценарии подтверждают регистрацию не только кодом, поэтому
+        API-клиент умеет то же, что браузерный tmail: `mail_wait_link` и
+        `mail_open_link` работают на обоих сервисах.
+        """
+        words = tuple(word.lower() for word in keywords if word) or ("verify",)
+        deadline = time.monotonic() + timeout
+        seen: set[str] = set()
+        while time.monotonic() < deadline:
+            listing = await self._request("GET", "/messages")
+            for item in listing.get("hydra:member", []):
+                message_id = item.get("id")
+                if not message_id or message_id in seen:
+                    continue
+                seen.add(message_id)
+                message = await self._request("GET", "/messages/" + quote(message_id, safe=""))
+                body = message.get("html") or []
+                if isinstance(body, str):
+                    body = [body]
+                text = html_module.unescape(" ".join([message.get("text") or "", *body]))
+                for url in self.LINK_PATTERN.findall(text):
+                    url = url.rstrip(").,;'\"")
+                    lowered = url.lower()
+                    if any(hint in lowered for hint in TmailWebClient.EXCLUDE_PATH_HINTS):
+                        continue
+                    if any(word in lowered for word in words):
+                        return url
+            await asyncio.sleep(interval)
+        raise TimeoutError("ссылка подтверждения не пришла за отведённое время")

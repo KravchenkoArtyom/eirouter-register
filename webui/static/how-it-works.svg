@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 620" width="1120" height="620"
+     font-family="system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img"
+     aria-label="Схема работы регистратора: панель, сценарий, браузер, сайт, почта, прокси, капча и файл аккаунтов">
+  <style>
+    :root, svg {
+      --bg: #fbfbfc; --card: #ffffff; --line: #d3d3d8; --ink: #1d1d20;
+      --muted: #6f6f76; --soft: #f2f2f4; --accent: #2b2b2f;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root, svg {
+        --bg: #1e1f23; --card: #232428; --line: #3c3d43; --ink: #e7e7ea;
+        --muted: #9a9aa2; --soft: #2a2b30; --accent: #e7e7ea;
+      }
+    }
+    .bg { fill: var(--bg); }
+    .card { fill: var(--card); stroke: var(--line); }
+    .soft { fill: var(--soft); stroke: var(--line); }
+    .title { fill: var(--ink); font-size: 20px; font-weight: 600; }
+    .h { fill: var(--ink); font-size: 14px; font-weight: 600; }
+    .t { fill: var(--muted); font-size: 12.5px; }
+    .n { fill: var(--muted); font-size: 11.5px; font-weight: 600; }
+    .edge { stroke: var(--line); stroke-width: 1.6; fill: none; }
+    .edge-strong { stroke: var(--muted); stroke-width: 1.8; fill: none; }
+    .mono { fill: var(--ink); font-size: 12.5px;
+      font-family: ui-monospace, Consolas, 'Cascadia Mono', monospace; }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7"
+            orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--muted)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1120" height="620" rx="12"/>
+  <text class="title" x="32" y="44">Как работает регистратор</text>
+  <text class="t" x="32" y="66">Один запуск: панель → сценарий → браузер → сайт. Письма берёт почта, адреса — прокси, капчу решает человек.</text>
+
+  <!-- 1. Панель -->
+  <rect class="card" x="32" y="96" width="228" height="104" rx="10"/>
+  <text class="n" x="48" y="120">1</text>
+  <text class="h" x="68" y="120">Панель в браузере</text>
+  <text class="t" x="48" y="142">Сценарий, число аккаунтов,</text>
+  <text class="t" x="48" y="160">почта, прокси, задержки.</text>
+  <text class="t" x="48" y="178">Кнопка «Запустить».</text>
+
+  <!-- 2. Сценарий -->
+  <rect class="card" x="300" y="96" width="228" height="104" rx="10"/>
+  <text class="n" x="316" y="120">2</text>
+  <text class="h" x="336" y="120">Сценарий сайта</text>
+  <text class="t" x="316" y="142">Список шагов: что заполнить,</text>
+  <text class="t" x="316" y="160">куда нажать, чего дождаться.</text>
+  <text class="mono" x="316" y="180">universal_scenarios/*.json</text>
+
+  <!-- 3. Браузер -->
+  <rect class="card" x="568" y="96" width="212" height="104" rx="10"/>
+  <text class="n" x="584" y="120">3</text>
+  <text class="h" x="604" y="120">Браузер</text>
+  <text class="t" x="584" y="142">Обычный Chrome или</text>
+  <text class="t" x="584" y="160">профиль AdsPower.</text>
+  <text class="t" x="584" y="178">Окно видно на экране.</text>
+
+  <!-- 4. Сайт -->
+  <rect class="card" x="820" y="96" width="268" height="104" rx="10"/>
+  <text class="n" x="836" y="120">4</text>
+  <text class="h" x="856" y="120">Страница регистрации</text>
+  <text class="t" x="836" y="142">Шаги выполняются по очереди</text>
+  <text class="t" x="836" y="160">с паузами из настроек —</text>
+  <text class="t" x="836" y="178">ритм не выглядит машинным.</text>
+
+  <!-- 6. Прокси -->
+  <rect class="soft" x="568" y="252" width="212" height="112" rx="10"/>
+  <text class="n" x="584" y="276">6</text>
+  <text class="h" x="604" y="276">Прокси</text>
+  <text class="t" x="584" y="298">Файл, список или один</text>
+  <text class="t" x="584" y="316">адрес вручную.</text>
+  <text class="t" x="584" y="334">Ротация: по кругу,</text>
+  <text class="t" x="584" y="352">случайно, липко, по ошибке.</text>
+
+  <!-- 5. Почта -->
+  <rect class="soft" x="820" y="252" width="268" height="112" rx="10"/>
+  <text class="n" x="836" y="276">5</text>
+  <text class="h" x="856" y="276">Почта</text>
+  <text class="t" x="836" y="298">tmail и Mail.tm встроены;</text>
+  <text class="t" x="836" y="316">свой сервис описывается</text>
+  <text class="t" x="836" y="334">шагами — создать ящик,</text>
+  <text class="t" x="836" y="352">обновить, открыть письмо.</text>
+
+  <!-- 7. Капча -->
+  <rect class="soft" x="300" y="252" width="228" height="112" rx="10"/>
+  <text class="n" x="316" y="276">7</text>
+  <text class="h" x="336" y="276">Капча</text>
+  <text class="t" x="316" y="298">Программа её не решает:</text>
+  <text class="t" x="316" y="316">замечает, ставит паузу,</text>
+  <text class="t" x="316" y="334">даёт сигнал и ждёт —</text>
+  <text class="t" x="316" y="352">таймаут настраивается.</text>
+
+  <!-- 8. Человек -->
+  <rect class="soft" x="32" y="252" width="228" height="112" rx="10"/>
+  <text class="n" x="48" y="276">8</text>
+  <text class="h" x="68" y="276">Человек</text>
+  <text class="t" x="48" y="298">Полоса сверху панели,</text>
+  <text class="t" x="48" y="316">звук и уведомление.</text>
+  <text class="t" x="48" y="334">Кнопки: «Я решил»,</text>
+  <text class="t" x="48" y="352">«Пропустить», «Остановить».</text>
+
+  <!-- 9. Результат -->
+  <rect class="card" x="300" y="424" width="480" height="96" rx="10"/>
+  <text class="n" x="316" y="448">9</text>
+  <text class="h" x="336" y="448">Результат запуска</text>
+  <text class="t" x="316" y="470">Адрес, пароль и статус аккаунта — в файле:</text>
+  <text class="mono" x="316" y="492">universal_accounts.json</text>
+  <text class="t" x="316" y="510">Лог запуска виден в панели и лежит в logs/.</text>
+
+  <!-- 10. Инспектор -->
+  <rect class="soft" x="820" y="424" width="268" height="96" rx="10"/>
+  <text class="n" x="836" y="448">10</text>
+  <text class="h" x="862" y="448">Инспектор</text>
+  <text class="t" x="836" y="470">Страница сайта или почты внутри</text>
+  <text class="t" x="836" y="488">панели: наведение подсвечивает,</text>
+  <text class="t" x="836" y="506">клик забирает селектор в шаг.</text>
+
+  <!-- связи -->
+  <path class="edge-strong" marker-end="url(#arrow)" d="M 260 148 H 296"/>
+  <path class="edge-strong" marker-end="url(#arrow)" d="M 528 148 H 564"/>
+  <path class="edge-strong" marker-end="url(#arrow)" d="M 780 148 H 816"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 674 252 V 204"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 954 252 V 204"/>
+  <path class="edge" marker-start="url(#arrow)" marker-end="url(#arrow)" d="M 900 200 V 248"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 862 204 V 228 H 414 V 248"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 300 300 H 264"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 264 336 H 296"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 828 204 V 220 H 800 V 470 H 784"/>
+  <path class="edge" marker-end="url(#arrow)" d="M 954 424 V 372"/>
+
+  <text class="t" x="424" y="244">капча на странице</text>
+  <text class="t" x="686" y="240">адрес выхода</text>
+  <text class="t" x="968" y="240">код или ссылка</text>
+  <text class="t" text-anchor="middle" transform="translate(794 340) rotate(-90)">аккаунт сохранён</text>
+</svg>
