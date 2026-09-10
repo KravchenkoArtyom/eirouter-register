@@ -28,7 +28,8 @@ logs/
 run_*.log
 universal_profiles/
 webui_elements.json
-webui_elements.json.tmp
+*.tmp
+*.json.corrupt
 universal_scenarios/_trash/
 webui.local.json
 mail_services/_trash/

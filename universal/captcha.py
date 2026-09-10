@@ -15,7 +15,8 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 MODES = ("wait", "pause", "stop", "log")
 
@@ -90,7 +91,7 @@ class CaptchaSettings:
     sound: bool = True
 
     @classmethod
-    def from_dict(cls, data: Any) -> "CaptchaSettings":
+    def from_dict(cls, data: Any) -> CaptchaSettings:
         values = data if isinstance(data, dict) else {}
 
         def number(key: str, default: float) -> float:

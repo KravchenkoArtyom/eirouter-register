@@ -90,7 +90,8 @@ function showElement(element) {
 function highlight(selector) {
   const frame = $('mirror');
   if (state.inspect.mode === 'mirror' && frame.contentWindow) {
-    frame.contentWindow.postMessage({ type: 'highlight', selector }, location.origin);
+    // Зеркало в песочнице: его origin — «null», поэтому цель сообщения '*'.
+    frame.contentWindow.postMessage({ type: 'highlight', selector }, '*');
   }
 }
 
@@ -163,7 +164,9 @@ export function initInspector() {
   };
 
   window.addEventListener('message', (event) => {
-    if (event.origin !== location.origin) return;
+    // Зеркало в песочнице приходит с origin «null», поэтому проверяем не
+    // origin, а сам источник: это должен быть наш iframe.
+    if (event.source !== $('mirror').contentWindow) return;
     const data = event.data || {};
     if (data.source !== 'webui-picker') return;
     if (data.type === 'hover') {

@@ -7,7 +7,8 @@ import { state } from './state.js';
 let rotations = [];
 
 export async function refreshProxies() {
-  const data = await api('/api/proxies');
+  // text=1 — сервер отдаёт сам список с логинами только редактору.
+  const data = await api('/api/proxies?text=1');
   rotations = data.rotations || [];
   $('proxyText').value = data.text || '';
   $('proxyFile').textContent = data.exists

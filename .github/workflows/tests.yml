@@ -1,0 +1,46 @@
+# Проверка кода и тесты на каждый push и pull request.
+#
+# Chrome ставится отдельно: часть тестов поднимает именно его (профили
+# браузера работают через channel="chrome"). Без Chrome такие тесты
+# пропускаются, поэтому окружение делаем полным.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Установить зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Установить браузеры Playwright
+        run: python -m playwright install --with-deps chromium chrome
+
+      - name: Проверить код (ruff)
+        run: ruff check .
+
+      - name: Тесты
+        run: pytest
+
+      - name: Сохранить снимки упавших аккаунтов
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: logs
+          path: logs/
+          if-no-files-found: ignore

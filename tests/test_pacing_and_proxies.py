@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from core.proxy_pool import (ProxyRotation, load_list, normalize_proxy, parse_lines,
-                             redact_proxy, save_list)
+from core.proxy_pool import (ProxyRotation, is_socks, load_list, normalize_proxy,
+                             parse_lines, redact_proxy, save_list)
 from universal.pacing import DEFAULTS, Pacing
 
 PROXIES = ["http://1.1.1.1:8000", "http://user:pass@2.2.2.2:8001", "http://3.3.3.3:8002"]
@@ -64,16 +64,29 @@ def test_save_list_writes_file(tmp_path):
 
 def test_redact_hides_credentials():
     assert redact_proxy("http://user:pass@2.2.2.2:8001") == "http://2.2.2.2:8001"
-    with pytest.raises(ValueError):
-        normalize_proxy("socks5://1.1.1.1:1080")
+    assert redact_proxy("socks5://1.1.1.1:1080") == "socks5://1.1.1.1:1080"
+
+
+def test_socks5_without_login_is_supported():
+    """socks5 берём как есть; логин у него Chromium не принимает."""
+    assert normalize_proxy("socks5://1.1.1.1:1080") == "socks5://1.1.1.1:1080"
+    assert is_socks("socks5h://1.1.1.1:1080")
+    assert not is_socks("1.1.1.1:8000")
+    with pytest.raises(ValueError, match="login"):
+        normalize_proxy("socks5://user:pass@1.1.1.1:1080")
+    with pytest.raises(ValueError, match="SOCKS4"):
+        normalize_proxy("socks4://1.1.1.1:1080")
 
 
 def test_socks_line_gets_its_own_explanation():
-    """Про socks говорим прямо: браузер такие адреса не примет."""
-    items, errors = parse_lines("socks5://1.1.1.1:1080\nмусор")
-    assert items == []
-    assert "socks" in errors[0] and "http" in errors[0]
-    assert "не похоже на прокси" in errors[1]
+    """Про socks говорим прямо: что примем, а что нет."""
+    items, errors = parse_lines("socks5://1.1.1.1:1080\n"
+                                "socks5://user:pass@1.1.1.1:1080\n"
+                                "socks4://1.1.1.1:1080\nмусор")
+    assert items == ["socks5://1.1.1.1:1080"]
+    assert "socks5 с логином" in errors[0]
+    assert "только socks5" in errors[1]
+    assert "не похоже на прокси" in errors[2]
 
 
 # ---- ротация ----

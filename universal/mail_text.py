@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import html
 import re
-from typing import Any, Iterable
+from typing import Any
+from collections.abc import Iterable
 
 EMAIL_REGEX = r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
 LINK_REGEX = r"https?://[^\s\"'<>]+"
@@ -73,7 +74,8 @@ def pick_code(sources: Iterable[str], length: int = 6,
     слово вида «code»; иначе берём первое изолированное число, не похожее на
     CSS-значение.
     """
-    pattern = re.compile(r"(?<!\d)(\d{%d})(?!\d)" % int(length))
+    # %-формат, а не f-строка: фигурные скобки заняты квантификатором
+    pattern = re.compile(r"(?<!\d)(\d{%d})(?!\d)" % int(length))  # noqa: UP031
     words = tuple(str(word).lower() for word in keywords) or DEFAULT_CODE_KEYWORDS
     fallback: str | None = None
     for text in sources:

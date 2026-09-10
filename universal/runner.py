@@ -9,11 +9,14 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 import string
 import uuid
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 import httpx
 from playwright.async_api import Error as PlaywrightError, Page, async_playwright
@@ -22,14 +25,18 @@ from core.adspower import AdsPowerProfiles
 from core.navigation import goto_with_retry
 from core.storage import AccountStore
 from universal.actions import GUARD_ACTIONS, MAIL_ACTIONS
-from universal.captcha import CaptchaGuard, CaptchaSettings
+from universal.captcha import CaptchaGuard, CaptchaSettings, CaptchaSkipped, CaptchaStop
 from universal.control import RunControl
 from universal.mail import MailHub, normalize_mail_service, random_login
 from universal.pacing import Pacing
-from universal.scenarios import SECTIONS, VERIFICATION_SECTIONS, has_action
+from universal.scenarios import SECTIONS, VERIFICATION_SECTIONS, has_action, validate
 
 # После этих действий страница обычно меняется — там и появляется капча.
 CHECK_AFTER = ("click", "press", "goto", "select", "mail_open_link")
+
+
+class StepFailed(RuntimeError):
+    """Шаг сценария не выполнился: в тексте — секция, номер и причина."""
 
 
 def random_password() -> str:
@@ -37,6 +44,9 @@ def random_password() -> str:
     chars = [secrets.choice(string.ascii_lowercase), secrets.choice(string.ascii_uppercase),
              secrets.choice(string.digits), secrets.choice("!@#$%")]
     chars.extend(secrets.choice(alphabet) for _ in range(16))
+    # Без перемешивания пароль всегда начинался бы с «строчная, заглавная,
+    # цифра, знак» — предсказуемый шаблон.
+    secrets.SystemRandom().shuffle(chars)
     return "".join(chars)
 
 
@@ -63,6 +73,14 @@ def _float(step: dict[str, Any], name: str, default: float) -> float:
         return float(step[name])
     except (KeyError, TypeError, ValueError):
         return default
+
+
+def _required(step: dict[str, Any], name: str) -> str:
+    """Обязательное текстовое поле шага с понятной ошибкой вместо KeyError."""
+    value = step.get(name)
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise ValueError(f"у действия {step.get('action')} не заполнено поле {name}")
+    return str(value)
 
 
 class ScenarioRunner:
@@ -120,19 +138,26 @@ class ScenarioRunner:
                 raise RuntimeError("Запуск остановлен пользователем")
             if self.pacing is not None:
                 await self.pacing.before_step(action)
-            await self._guard_check(where)
-            if action in GUARD_ACTIONS:
-                await self._run_guard(action, step, where)
-            elif action in MAIL_ACTIONS:
-                await self._run_mail(action, step)
-            else:
-                await self._run_page(action, step)
-            if action in CHECK_AFTER:
-                await self._guard_check(where + " → после действия")
+            try:
+                await self.guard_check(where)
+                if action in GUARD_ACTIONS:
+                    await self._run_guard(action, step, where)
+                elif action in MAIL_ACTIONS:
+                    await self._run_mail(action, step)
+                else:
+                    await self._run_page(action, step)
+                if action in CHECK_AFTER:
+                    await self.guard_check(where + " → после действия")
+            except (CaptchaStop, CaptchaSkipped, StepFailed):
+                raise
+            except Exception as error:
+                # К любой ошибке шага приклеиваем секцию и номер: по логу сразу
+                # видно, какой шаг сценария править.
+                raise StepFailed(f"{where}: {type(error).__name__}: {error}") from error
             note = f" — {step['note']}" if step.get("note") else ""
             self.log(f"[scenario] {section} {number}/{len(steps)}: {action} готово{note}")
 
-    async def _guard_check(self, where: str) -> None:
+    async def guard_check(self, where: str) -> None:
         """Капча перед шагом: кликать сквозь проверку бессмысленно."""
         if self.guard is None:
             return
@@ -185,18 +210,20 @@ class ScenarioRunner:
             await (await self.locator(step)).click(force=bool(step.get("force", False)))
         elif action == "select":
             await (await self.locator(step)).select_option(
-                str(format_value(step["value"], self.variables)))
+                str(format_value(_required(step, "value"), self.variables)))
         elif action == "press":
-            await (await self.locator(step)).press(str(step["key"]))
+            await (await self.locator(step)).press(_required(step, "key"))
         elif action == "wait":
             await asyncio.sleep(_float(step, "seconds", 1))
         elif action == "wait_visible":
             await self.locator(step)
         elif action == "wait_url":
-            await self.page.wait_for_url(str(format_value(step["url"], self.variables)),
+            await self.page.wait_for_url(str(format_value(_required(step, "url"),
+                                                          self.variables)),
                                          timeout=_int(step, "timeout_ms", 30_000))
         elif action == "goto":
-            await goto_with_retry(self.page, str(format_value(step["url"], self.variables)),
+            await goto_with_retry(self.page,
+                                  str(format_value(_required(step, "url"), self.variables)),
                                   log=self.log)
         elif action == "dom":
             await self._run_dom(step)
@@ -210,7 +237,7 @@ class ScenarioRunner:
             await target.evaluate("node => node.remove()")
         elif operation == "set_attribute":
             await target.evaluate("(node, data) => node.setAttribute(data.name, data.value)",
-                                  {"name": step["name"],
+                                  {"name": _required(step, "name"),
                                    "value": str(format_value(step.get("value", ""), self.variables))})
         elif operation == "set_html":
             await target.evaluate("(node, html) => node.innerHTML = html",
@@ -276,21 +303,46 @@ def scenario_service(scenario: dict[str, Any], service: str) -> str:
     return normalize_mail_service(str(scenario.get("mail", "none"))) or "none"
 
 
+async def _save_failure(page: Page, folder: Path, error: BaseException,
+                        log: Callable[[str], None]) -> None:
+    """Снимок экрана и HTML упавшего аккаунта — чтобы починить сценарий."""
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+        await page.screenshot(path=str(folder / "screen.png"), full_page=True)
+        (folder / "page.html").write_text(await page.content(), encoding="utf-8")
+        (folder / "error.json").write_text(json.dumps(
+            {"url": page.url, "error": f"{type(error).__name__}: {error}",
+             "at": datetime.now().astimezone().isoformat(timespec="seconds")},
+            ensure_ascii=False, indent=2), encoding="utf-8")
+        log(f"[universal] Снимок падения: {folder}")
+    except Exception as inner:  # диагностика не должна ронять запуск
+        log(f"[universal] Снимок падения не сделан: {type(inner).__name__}: {inner}")
+
+
 async def register_one(scenario: dict[str, Any], service: str, profiles, output: Path,
                        proxy: str | None, log: Callable[[str], None],
                        control: RunControl | None = None, pacing: Pacing | None = None,
-                       captcha: CaptchaSettings | None = None) -> dict[str, Any]:
+                       captcha: CaptchaSettings | None = None,
+                       store: AccountStore | None = None,
+                       artifacts: Path | None = None) -> dict[str, Any]:
     """Зарегистрировать один аккаунт по сценарию и сохранить его в `output`.
 
     `control` связывает запуск с наблюдателем (панель, консоль): через него
     уходят уведомления о капче и приходит ответ человека. `pacing` — задержки,
-    `captcha` — как вести себя при проверке.
+    `captcha` — как вести себя при проверке. `store` передаёт вызывающий, если
+    хранилище общее на весь запуск (иначе создаётся и закрывается своё).
+    `artifacts` — куда положить снимок экрана и HTML при падении.
     """
+    errors = validate(scenario)
+    if errors:
+        raise ValueError("Сценарий не пройдёт: " + "; ".join(errors))
     account_id = str(uuid.uuid4())
     secret = random_password()
     login = random_login()
-    store = AccountStore(output)
+    own_store = store is None
+    store = store or AccountStore(output)
     context = None
+    page = None
     saved = False
     service = scenario_service(scenario, service)
     pacing = pacing or Pacing.from_dict(scenario.get("delays"))
@@ -317,7 +369,7 @@ async def register_one(scenario: dict[str, Any], service: str, profiles, output:
                                   attempts=3, log=log)
             runner = ScenarioRunner(page, variables, log, mail, guard, pacing, control)
             # Капча иногда встречает на входе, ещё до первого шага.
-            await runner._guard_check("страница открыта")
+            await runner.guard_check("страница открыта")
             for section in SECTIONS:
                 if section == "submit":
                     await _run_verification(runner, scenario)
@@ -334,11 +386,18 @@ async def register_one(scenario: dict[str, Any], service: str, profiles, output:
             saved = True
             log(f"[universal] Аккаунт {account_name} сохранён в {output}")
             return store.get(account_name) or {}
+        except Exception as error:
+            if page is not None and artifacts is not None:
+                stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                await _save_failure(page, artifacts / f"{stamp}_{account_id[:8]}", error, log)
+            raise
         finally:
             if context is not None:
                 await profiles.close(context)
             if saved and isinstance(profiles, AdsPowerProfiles):
                 await profiles.delete_created(account_id, log)
+            if own_store:
+                store.close()
 
 
 async def _run_verification(runner: ScenarioRunner, scenario: dict[str, Any]) -> None:

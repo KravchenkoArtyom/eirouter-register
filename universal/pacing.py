@@ -44,7 +44,7 @@ class Pacing:
                                                    "uncheck"))
 
     @classmethod
-    def from_dict(cls, data: Any) -> "Pacing":
+    def from_dict(cls, data: Any) -> Pacing:
         values = data if isinstance(data, dict) else {}
         return cls(step_min_ms=_number(values, "step_min_ms", DEFAULTS["step_min_ms"]),
                    step_max_ms=_number(values, "step_max_ms", DEFAULTS["step_max_ms"]),

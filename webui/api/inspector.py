@@ -1,4 +1,8 @@
-"""API инспектора: зеркало страницы, выбор элементов и временный буфер."""
+"""API инспектора: зеркало страницы, выбор элементов и временный буфер.
+
+Сессия — это headless-браузер на этой машине, поэтому она закрывается сама
+после простоя, а `shutdown()` гасит все сессии при выходе из панели.
+"""
 from __future__ import annotations
 
 import base64
@@ -10,8 +14,9 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import HTMLResponse
 
 from webui.element_buffer import ElementBuffer
-from webui.inspect_session import InspectSession, inject_picker
-from webui.settings import BUFFER_FILE, MAX_INSPECT_SESSIONS, STATIC_DIR
+from webui.inspect_session import (InspectSession, inject_picker, mirror_csp, new_nonce)
+from webui.settings import (BUFFER_FILE, INSPECT_IDLE_SECONDS, MAX_INSPECT_SESSIONS,
+                            STATIC_DIR)
 
 router = APIRouter(tags=["inspector"])
 
@@ -21,11 +26,38 @@ _sessions_lock = threading.Lock()
 PICKER_FILE = STATIC_DIR / "picker.js"
 
 
+def _close(session: InspectSession) -> None:
+    try:
+        session.close()
+    except Exception:  # браузер уже упал — сессию всё равно забываем
+        pass
+
+
+def _drop_idle() -> None:
+    """Закрыть сессии, к которым давно не обращались."""
+    with _sessions_lock:
+        stale = [sid for sid, session in _sessions.items()
+                 if session.idle_seconds > INSPECT_IDLE_SECONDS]
+        for sid in stale:
+            _close(_sessions.pop(sid))
+
+
 def _session(sid: str) -> InspectSession:
-    session = _sessions.get(sid)
+    _drop_idle()
+    with _sessions_lock:
+        session = _sessions.get(sid)
     if session is None:
         raise HTTPException(404, "Сессия инспектора не найдена")
     return session
+
+
+def shutdown() -> None:
+    """Закрыть все браузеры инспектора (вызывается при выходе из панели)."""
+    with _sessions_lock:
+        sessions = list(_sessions.values())
+        _sessions.clear()
+    for session in sessions:
+        _close(session)
 
 
 # ---- сессия ----
@@ -34,19 +66,22 @@ def api_inspect_start(payload: dict[str, Any]) -> dict[str, Any]:
     url = str(payload.get("url", "")).strip()
     if not url.startswith(("http://", "https://")):
         raise HTTPException(400, "Нужен http(s) адрес")
+    _drop_idle()
+    # Лишние сессии закрываем до старта нового браузера, но сам старт держим
+    # вне лока: он занимает секунды, а лок нужен всем запросам инспектора.
     with _sessions_lock:
-        while len(_sessions) >= MAX_INSPECT_SESSIONS:
-            old_id, old = next(iter(_sessions.items()))
-            try:
-                old.close()
-            except Exception:
-                pass
-            _sessions.pop(old_id, None)
-        sid = uuid.uuid4().hex[:8]
-        try:
-            session = InspectSession(url)
-        except Exception as error:
-            raise HTTPException(500, f"Инспектор не открылся: {error}")
+        extra = max(0, len(_sessions) + 1 - MAX_INSPECT_SESSIONS)
+        victims = [sid for sid, _ in sorted(_sessions.items(),
+                                            key=lambda item: item[1].last_used)][:extra]
+        old = [_sessions.pop(sid) for sid in victims]
+    for session in old:
+        _close(session)
+    try:
+        session = InspectSession(url)
+    except Exception as error:
+        raise HTTPException(500, f"Инспектор не открылся: {error}")
+    sid = uuid.uuid4().hex[:8]
+    with _sessions_lock:
         _sessions[sid] = session
     return {"sid": sid, "state": session.state()}
 
@@ -70,8 +105,10 @@ def api_inspect_mirror(sid: str) -> HTMLResponse:
     except Exception as error:
         raise HTTPException(500, f"Зеркало не собралось: {error}")
     script = PICKER_FILE.read_text(encoding="utf-8")
-    return HTMLResponse(inject_picker(html or "", script, sid, session.revision),
-                        headers={"Cache-Control": "no-store"})
+    nonce = new_nonce()
+    return HTMLResponse(inject_picker(html or "", script, sid, session.revision, nonce),
+                        headers={"Cache-Control": "no-store",
+                                 "Content-Security-Policy": mirror_csp(nonce)})
 
 
 @router.get("/api/inspect/{sid}/shot")
@@ -138,10 +175,7 @@ def api_inspect_close(sid: str) -> dict[str, Any]:
         session = _sessions.pop(sid, None)
     if session is None:
         raise HTTPException(404, "Сессия инспектора не найдена")
-    try:
-        session.close()
-    except Exception:
-        pass
+    _close(session)
     return {"ok": True}
 
 

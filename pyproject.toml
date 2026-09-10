@@ -1,0 +1,45 @@
+# Метаданные проекта и настройки инструментов. Пакет ставить не нужно:
+# программа запускается из папки (`py -3 -m webui`), а здесь собраны версия,
+# правила проверки кода и настройки тестов, чтобы они были в одном месте.
+[project]
+name = "eirouter-register"
+version = "1.0.0"
+description = "Автономный регистратор аккаунтов: панель, сценарии, свой браузер"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+dependencies = [
+    "fastapi>=0.110,<1.0",
+    "httpx>=0.27,<1.0",
+    "playwright>=1.44,<2.0",
+    "pydantic>=2.0,<3.0",
+    "uvicorn>=0.29,<1.0",
+]
+
+[project.optional-dependencies]
+# Проверка socks5-прокси в панели (в браузере socks5 работает и без этого).
+socks = ["httpx[socks]>=0.27,<1.0"]
+dev = ["pytest>=8,<10", "ruff>=0.5,<1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+markers = ["chrome: тесту нужен установленный Google Chrome"]
+
+[tool.ruff]
+# В коде есть длинные строки со встроенным JavaScript, поэтому длину строки не
+# проверяем: ловим настоящие ошибки — неиспользованные имена, опечатки, тени.
+line-length = 100
+target-version = "py311"
+exclude = ["universal_scenarios", "mail_services", "docs", "logs"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "B", "UP", "C4"]
+ignore = [
+    "B008",    # Depends()/HTTPException в аргументах — обычная практика FastAPI
+    "B904",    # «raise ... from» не требуем: в API важнее короткое сообщение
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]   # assert в тестах — это норма

@@ -2,14 +2,20 @@
 
 Файлы, которые тесты меняют (список прокси, настройки панели), подменяются на
 временные — рабочие proxies.txt и webui.local.json не трогаются.
+
+Панель отвечает только на свои адреса (см. `webui/security.py`), поэтому клиент
+ходит с петлевого хоста, как настоящий браузер на компьютере пользователя.
 """
+import json
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
 from universal.scenarios import TRASH_DIR
 from webui.server import app
 
-client = TestClient(app)
+client = TestClient(app, base_url="http://127.0.0.1:8765")
 TEMP_NAME = "pytest-temp-scenario"
 TEMP_MAIL = "pytest-temp-service"
 
@@ -264,6 +270,144 @@ def test_proxy_requests_are_validated(proxies_file):
     assert client.post("/api/proxies/check", json={}).status_code == 400
 
 
+def test_proxy_text_is_given_only_on_request(proxies_file):
+    """В строках прокси есть пароли: текст файла отдаём только редактору."""
+    client.put("/api/proxies", json={"text": "user:pass@2.2.2.2:8001"})
+    quiet = client.get("/api/proxies").json()
+    assert quiet["text"] == "" and quiet["has_text"] is True
+    editor = client.get("/api/proxies?text=1").json()
+    assert "user:pass@2.2.2.2:8001" in editor["text"]
+
+
+def test_proxy_check_reports_ip_and_errors(proxies_file, monkeypatch):
+    """Проверка связи: что ответило — то и показываем, без паролей в ответе."""
+    def handler(request):
+        assert str(request.url) == "https://api.ipify.org?format=json"
+        return httpx.Response(200, json={"ip": "203.0.113.7"})
+
+    original = httpx.AsyncClient
+
+    def fake_client(**kwargs):
+        assert kwargs.get("proxy"), "прокси должен передаваться клиенту"
+        kwargs.pop("proxy", None)
+        return original(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_client)
+    answer = client.post("/api/proxies/check",
+                         json={"text": "user:pass@2.2.2.2:8001\n1.1.1.1:8000"}).json()
+    assert (answer["checked"], answer["ok"]) == (2, 2)
+    assert {item["ip"] for item in answer["results"]} == {"203.0.113.7"}
+    assert "pass" not in json.dumps(answer, ensure_ascii=False)
+
+
+def test_proxy_check_survives_dead_address(proxies_file, monkeypatch):
+    original = httpx.AsyncClient
+
+    def fake_client(**kwargs):
+        kwargs.pop("proxy", None)
+        return original(transport=httpx.MockTransport(
+            lambda request: (_ for _ in ()).throw(httpx.ConnectError("нет связи"))), **kwargs)
+
+    monkeypatch.setattr(httpx, "AsyncClient", fake_client)
+    answer = client.post("/api/proxies/check", json={"text": "1.1.1.1:8000"}).json()
+    assert answer["ok"] == 0
+    assert "ConnectError" in answer["results"][0]["error"]
+
+
+def test_socks_check_explains_missing_extra(proxies_file, monkeypatch):
+    """Без httpx[socks] проверить socks5 нельзя — говорим об этом прямо."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "socksio":
+            raise ImportError("нет модуля")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    answer = client.post("/api/proxies/check",
+                         json={"text": "socks5://1.1.1.1:1080"}).json()
+    assert answer["ok"] == 0
+    assert "httpx[socks]" in answer["results"][0]["error"]
+
+
+# ---- аккаунты ----
+def test_accounts_csv_has_no_passwords(tmp_path, monkeypatch):
+    records = [{"email": "a@example.test", "provider": "demo", "status": "active",
+                "password": "СЕКРЕТ", "api_key": "sk-1", "created_at": "2024-05-01"},
+               "мусор"]
+    (tmp_path / "universal_accounts.json").write_text(
+        json.dumps(records, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr("webui.api.accounts.ROOT", tmp_path)
+    monkeypatch.setattr("webui.api.accounts.ACCOUNT_FILES", ("universal_accounts.json",))
+    response = client.get("/api/accounts/export.csv")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert "attachment" in response.headers["content-disposition"]
+    body = response.text
+    assert body.startswith("\ufeff")            # BOM для Excel
+    assert "a@example.test" in body and "да" in body
+    assert "СЕКРЕТ" not in body and "sk-1" not in body
+    listed = client.get("/api/accounts").json()["files"][0]
+    assert listed["total"] == 1 and listed["accounts"][0]["has_key"] is True
+
+
+def test_broken_accounts_file_does_not_break_panel(tmp_path, monkeypatch):
+    (tmp_path / "universal_accounts.json").write_text("{ не json", encoding="utf-8")
+    monkeypatch.setattr("webui.api.accounts.ROOT", tmp_path)
+    monkeypatch.setattr("webui.api.accounts.ACCOUNT_FILES", ("universal_accounts.json",))
+    assert client.get("/api/accounts").json()["files"][0]["total"] == 0
+    assert client.get("/api/accounts/export.csv").status_code == 200
+
+
+# ---- сухой прогон ----
+def test_dry_run_needs_address(tmp_path, monkeypatch):
+    name = client.get("/api/scenarios").json()[0]["name"]
+    assert client.post("/api/scenarios/нет-такого/dry-run", json={}).status_code == 404
+    assert client.post(f"/api/scenarios/{name}/dry-run",
+                       json={"url": "ftp://site.example"}).status_code == 400
+
+
+def test_dry_run_checks_every_selector(monkeypatch):
+    """Браузер подменён: проверяем отчёт, а не сеть."""
+    class FakeSession:
+        def __init__(self, url):
+            self.url = url
+
+        def state(self):
+            return {"url": self.url}
+
+        def verify(self, selector):
+            return {"count": 1 if selector.startswith("#") else 0}
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr("webui.api.scenarios.InspectSession", FakeSession)
+    client.delete(f"/api/scenarios/{TEMP_NAME}")
+    created = client.post("/api/scenarios", json={"name": TEMP_NAME, "mail": "none",
+                                                  "url": "https://site.example/signup"})
+    assert created.status_code == 200, created.text
+    saved = client.put(f"/api/scenarios/{TEMP_NAME}", json={
+        "name": TEMP_NAME, "url": "https://site.example/signup", "mail": "none",
+        "steps": [{"action": "fill", "selectors": ["#email"], "value": "{email}"},
+                  {"action": "click", "selectors": [".ghost", ".none"]},
+                  {"action": "wait", "seconds": 1}]})
+    assert saved.status_code == 200, saved.text
+    try:
+        report = client.post(f"/api/scenarios/{TEMP_NAME}/dry-run", json={}).json()
+    finally:
+        client.delete(f"/api/scenarios/{TEMP_NAME}")
+        for leftover in TRASH_DIR.glob(f"{TEMP_NAME}_*.json"):
+            leftover.unlink()
+    assert report["url"] == "https://site.example/signup"
+    assert report["errors"] == [] and report["checked"] == 2   # шаг wait не проверяем
+    assert report["problems"] == 1
+    assert report["steps"][0]["ok"] and report["steps"][0]["found"] == "#email"
+    assert not report["steps"][1]["ok"] and report["steps"][1]["where"] == "steps[2]"
+
+
 # ---- настройки панели ----
 @pytest.fixture
 def settings_file(tmp_path, monkeypatch):
@@ -307,9 +451,13 @@ def test_run_validates_network_options():
     assert client.post("/api/runs", json={"scenario": name, "proxy_mode": "single",
                                           "proxy": ""}).status_code == 400
     assert client.post("/api/runs", json={"scenario": name, "proxy_mode": "single",
-                                          "proxy": "socks5://1.1.1.1:1080"}).status_code == 400
+                                          "proxy": "socks4://1.1.1.1:1080"}).status_code == 400
     assert client.post("/api/runs", json={"scenario": name, "proxy_mode": "list",
                                           "proxies_text": "мусор"}).status_code == 400
+    assert client.post("/api/runs", json={"scenario": name,
+                                          "workers": 99}).status_code == 400
+    assert client.post("/api/runs", json={"scenario": name,
+                                          "workers": "два"}).status_code == 400
 
 
 def test_captcha_answer_needs_known_run():

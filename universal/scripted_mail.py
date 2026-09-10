@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 import secrets
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from universal import mail_text
 
@@ -87,7 +88,10 @@ class ScriptedMailClient:
             raise ValueError(f"Почтовый сервис {self.name}: не указан адрес страницы")
         self.page = await context.new_page()
         try:
-            await context.grant_permissions(["clipboard-read", "clipboard-write"])
+            # Разрешение выдаём только странице почты: сайту регистрации
+            # читать буфер обмена незачем.
+            await context.grant_permissions(["clipboard-read", "clipboard-write"],
+                                            origin=url)
         except Exception:  # не Chromium или права уже выданы
             pass
         await self.page.goto(url, wait_until="domcontentloaded", timeout=120_000)

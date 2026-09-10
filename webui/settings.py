@@ -17,3 +17,15 @@ PROXIES_FILE = ROOT / "proxies.txt"
 BUFFER_FILE = ROOT / "webui_elements.json"
 
 MAX_INSPECT_SESSIONS = 3
+# Простаивающая сессия инспектора закрывается сама: браузер не должен висеть
+# после того, как человек ушёл со страницы.
+INSPECT_IDLE_SECONDS = 900
+
+# Логи панели: журнал запусков и артефакты упавших аккаунтов (в .gitignore).
+LOGS_DIR = ROOT / "logs"
+RUNS_LOG_DIR = LOGS_DIR / "runs"
+FAILURES_DIR = LOGS_DIR / "failures"
+# Сколько строк лога панель держит в памяти; полный лог лежит в файле запуска.
+RUN_LOG_LIMIT = 5000
+# Сколько аккаунтов можно регистрировать одновременно в одном запуске.
+MAX_RUN_WORKERS = 4

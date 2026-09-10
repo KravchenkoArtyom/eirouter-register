@@ -306,6 +306,7 @@ def test_mailtm_logs_invalid_responses_and_network_errors(failure: str) -> None:
     assert "SECRET" not in "\n".join(logs)
 
 
+@pytest.mark.chrome
 def test_form_and_key_capture_in_browser(tmp_path: Path) -> None:
     async def run() -> None:
         async with async_playwright() as pw:
@@ -354,6 +355,7 @@ def test_form_and_key_capture_in_browser(tmp_path: Path) -> None:
     asyncio.run(run())
 
 
+@pytest.mark.chrome
 @pytest.mark.parametrize("mode", ["no_news", "hidden_key", "visible_key", "during_key_click"])
 def test_key_capture_dismisses_announcement_queue(tmp_path: Path, mode: str) -> None:
     async def run() -> None:

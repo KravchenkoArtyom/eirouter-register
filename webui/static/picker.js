@@ -34,9 +34,12 @@
   host.appendChild(box);
   host.appendChild(label);
 
+  /* Зеркало живёт в песочнице iframe, поэтому его origin — «null», и адресовать
+     сообщения панели можно только звёздочкой. Панель, со своей стороны, узнаёт
+     зеркало по event.source, а не по origin. */
   function send(type, payload) {
     try {
-      parent.postMessage({ source: 'webui-picker', type: type, payload: payload }, location.origin);
+      parent.postMessage({ source: 'webui-picker', type: type, payload: payload }, '*');
     } catch (error) { /* панель закрыта */ }
   }
 
@@ -205,7 +208,7 @@
   window.addEventListener('resize', function () { outline(frozen || current, !!frozen); });
 
   window.addEventListener('message', function (event) {
-    if (event.origin !== location.origin || !event.data) return;
+    if (event.source !== parent || !event.data) return;
     var data = event.data;
     if (data.type === 'highlight') {
       var element = null;

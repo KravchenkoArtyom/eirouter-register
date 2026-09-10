@@ -117,6 +117,34 @@ export async function saveScenario() {
   }
 }
 
+/* Отчёт сухого прогона: какие селекторы нашлись на первой странице.
+   Шаги, которые появляются только после отправки формы, честно попадают в
+   «не найден» — это ожидаемо, о чём и написано в подсказке. */
+function renderDryRun(report) {
+  const errors = (report.errors || []).length
+    ? `<p class="hint err-text">Сценарий пока не пройдёт: ${esc(report.errors.join('; '))}</p>`
+    : '';
+  if (!report.checked) {
+    $('dryRunResult').innerHTML = errors
+      + '<p class="hint">В сценарии нет шагов с селекторами.</p>';
+    return;
+  }
+  const rows = (report.steps || []).map((step) => {
+    const mark = step.ok ? '\u2713' : '\u00d7';
+    const detail = step.ok
+      ? `${esc(step.found)}${step.count > 1 ? ` (совпадений: ${step.count})` : ''}`
+      : (step.error ? esc(step.error)
+        : 'ни один селектор не найден: ' + esc((step.selectors || []).join(' | ')));
+    return `<div class="row ${step.ok ? '' : 'bad'}"><span>${mark}</span>
+      <span class="where mono">${esc(step.where)}</span>
+      <span class="mono">${esc(step.action)}</span><span>${detail}</span></div>`;
+  }).join('');
+  $('dryRunResult').innerHTML = errors + `<div class="dry-run"><p class="hint">${esc(report.url)}`
+    + ` — проверено шагов: ${report.checked}, не найдено: ${report.problems}.`
+    + ' Шаги следующих экранов на первой странице не видны, это ожидаемо.</p>'
+    + rows + '</div>';
+}
+
 export function initScenarios() {
   editor.fillActionSelect();
 
@@ -141,6 +169,23 @@ export function initScenarios() {
         result.errors.length ? 'err' : 'ok');
     } catch (error) {
       toast(error.message, 'err');
+    }
+  };
+
+  $('btnDryRun').onclick = async () => {
+    if (!scenario.key) return toast('Сначала выберите сценарий', 'err');
+    const button = $('btnDryRun');
+    button.disabled = true;
+    $('dryRunResult').innerHTML = '<p class="hint">Открываю страницу и проверяю селекторы…</p>';
+    try {
+      const report = await sendJson('/api/scenarios/' + encodeURIComponent(scenario.key)
+        + '/dry-run', 'POST', { url: $('edUrl').value.trim() });
+      renderDryRun(report);
+    } catch (error) {
+      $('dryRunResult').innerHTML = '';
+      toast(error.message, 'err');
+    } finally {
+      button.disabled = false;
     }
   };
 

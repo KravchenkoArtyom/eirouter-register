@@ -302,7 +302,8 @@ class TmailWebClient:
         которым стоит слово вида 'code' - иначе берём первое изолированное
         число, не похожее на CSS-значение.
         """
-        pattern = re.compile(r"(?<!\d)(\d{%d})(?!\d)" % length)
+        # %-формат, а не f-строка: фигурные скобки заняты квантификатором
+        pattern = re.compile(r"(?<!\d)(\d{%d})(?!\d)" % length)  # noqa: UP031
         fallback = None
         for text, _ts in sources:
             clean = cls._strip_markup(text)

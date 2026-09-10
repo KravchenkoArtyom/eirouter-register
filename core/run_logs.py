@@ -1,4 +1,8 @@
-"""Mirror console output into a separate UTF-8 log for each CLI run."""
+"""Mirror console output into a separate UTF-8 log for each CLI run.
+
+`mask_secrets` is shared with the WebUI run log: neither file should keep API
+keys or proxy credentials in plain text.
+"""
 
 import re
 import sys
@@ -6,6 +10,12 @@ import threading
 from contextlib import redirect_stderr, redirect_stdout
 from datetime import datetime
 from pathlib import Path
+
+
+def mask_secrets(line: str) -> str:
+    """Скрыть ключи и пароли прокси в строке лога."""
+    line = re.sub(r"sk-[A-Za-z0-9_*-]+", "[REDACTED_KEY]", line)
+    return re.sub(r"(\w+://)[^\s/@]+@", r"\1[REDACTED]@", line)
 
 
 class ConsoleLog:
@@ -25,8 +35,7 @@ class ConsoleLog:
         return len(text)
 
     def _record(self, line):
-        line = re.sub(r"sk-[A-Za-z0-9_*-]+", "[REDACTED_KEY]", line)
-        line = re.sub(r"(https?://)[^\s/@]+@", r"\1[REDACTED]@", line)
+        line = mask_secrets(line)
         self.logfile.write(f"[{datetime.now().astimezone().isoformat(timespec='seconds')}] {line}\n")
         self.logfile.flush()
 

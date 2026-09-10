@@ -6,7 +6,7 @@ whole run. Callers retry a few times before treating the account as failed and
 moving on.
 """
 
-from typing import Callable
+from collections.abc import Callable
 
 from playwright.async_api import Error as PlaywrightError, Page, TimeoutError as PlaywrightTimeout
 

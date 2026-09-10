@@ -10,7 +10,8 @@ from universal.actions import (ACTIONS, GUARD_ACTIONS, MAIL_ACTIONS, PAGE_ACTION
                                needs_selector, required_fields)
 from universal.control import RunControl
 from universal.pacing import Pacing
-from universal.runner import ScenarioRunner, format_value, scenario_service
+from universal.runner import (ScenarioRunner, StepFailed, format_value,
+                              scenario_service)
 
 
 class FakeMailbox:
@@ -165,9 +166,12 @@ def test_keywords_accepts_string_list_and_default():
 
 # ---- страничные шаги ----
 def test_unknown_action_is_rejected():
+    """Ошибка шага несёт номер, секцию и первопричину."""
     _, _, _, runner = build_runner()
-    with pytest.raises(ValueError, match="Неподдерживаемое действие"):
-        asyncio.run(runner.run([{"action": "teleport"}]))
+    with pytest.raises(StepFailed, match="Неподдерживаемое действие") as failure:
+        asyncio.run(runner.run([{"action": "teleport"}], section="steps"))
+    assert "steps 1/1 (teleport)" in str(failure.value)
+    assert isinstance(failure.value.__cause__, ValueError)
 
 
 def test_wait_step_does_not_need_selector():

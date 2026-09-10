@@ -12,7 +12,8 @@
 from __future__ import annotations
 
 import secrets
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from core.tmail_web import TmailWebClient
 from providers.eirouter_mail import MailTmClient

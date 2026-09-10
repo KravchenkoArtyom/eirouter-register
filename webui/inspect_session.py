@@ -5,21 +5,28 @@
 открывается в iframe WebUI, поэтому подсветка при наведении и выбор элемента
 работают мгновенно и без запросов к серверу (см. `static/picker.js`).
 
-Скрипты сайта из зеркала вырезаны, внешние фреймы не подгружаются, `<base>`
-подставлен — стили и картинки берутся с сайта, а клики никуда не ведут.
-Проверка селектора (`verify`) и действия (`act`) выполняются уже на настоящей
-странице, поэтому селектор проверяется в том же контексте, где потом поедет
-сценарий.
+Скрипты сайта из зеркала вырезаны вместе с inline-обработчиками (`onclick`,
+`onerror`), `javascript:`-ссылками и `srcdoc`; внешние фреймы не подгружаются,
+`<base>` подставлен — стили и картинки берутся с сайта, а клики никуда не
+ведут. Сверху панель отдаёт зеркало с CSP (разрешён только наш скрипт по
+nonce) и держит его в песочнице iframe, поэтому даже пропущенный обработчик не
+доберётся до локального API. Проверка селектора (`verify`) и действия (`act`)
+выполняются уже на настоящей странице, поэтому селектор проверяется в том же
+контексте, где потом поедет сценарий.
 """
 from __future__ import annotations
 
+import html as html_escape
 import queue
+import secrets
 import threading
+import time
 from typing import Any
 
 MIRROR_JS = """() => {
   const html = document.documentElement.cloneNode(true);
   html.querySelectorAll('script, noscript, link[as="script"], meta[http-equiv="Content-Security-Policy"], meta[http-equiv="refresh"]').forEach(node => node.remove());
+  html.querySelectorAll('link[rel~="import" i], link[rel~="preload" i], link[rel~="prefetch" i]').forEach(node => node.remove());
   const live = document.querySelectorAll('input, textarea, select');
   const copy = html.querySelectorAll('input, textarea, select');
   for (let i = 0; i < live.length && i < copy.length; i++) {
@@ -39,6 +46,23 @@ MIRROR_JS = """() => {
   html.querySelectorAll('iframe, frame, object, embed').forEach(node => {
     const src = node.getAttribute('src');
     if (src) { node.setAttribute('data-mirror-src', src); node.removeAttribute('src'); }
+  });
+  // Обработчики и javascript:-переходы сайта в зеркале не нужны: элементы
+  // выбираются, а не выполняются.
+  const dangerous = /^\\s*javascript:/i;
+  html.querySelectorAll('*').forEach(node => {
+    Array.from(node.attributes || []).forEach(attribute => {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith('on') || name === 'srcdoc' || name === 'nonce') {
+        node.removeAttribute(attribute.name);
+        return;
+      }
+      if (['href', 'src', 'action', 'formaction', 'xlink:href', 'data', 'poster'].indexOf(name) >= 0
+          && dangerous.test(attribute.value || '')) {
+        node.setAttribute('data-mirror-' + name, attribute.value);
+        node.removeAttribute(attribute.name);
+      }
+    });
   });
   let head = html.querySelector('head');
   if (!head) { head = document.createElement('head'); html.insertBefore(head, html.firstChild); }
@@ -121,6 +145,10 @@ class InspectSession:
         self._ready = threading.Event()
         self._error: Exception | None = None
         self.revision = 1
+        self.url = url
+        self.opened_at = time.monotonic()
+        self.last_used = self.opened_at
+        self.closed = False
         threading.Thread(target=self._worker, args=(url,), daemon=True,
                          name="webui-inspect").start()
         if not self._ready.wait(timeout=90):
@@ -155,6 +183,9 @@ class InspectSession:
             self._ready.set()
 
     def call(self, task, timeout: float = 90.0):
+        if self.closed:
+            raise RuntimeError("сессия инспектора закрыта")
+        self.last_used = time.monotonic()
         box: dict[str, Any] = {"done": threading.Event()}
         self._queue.put((task, box))
         if not box["done"].wait(timeout):
@@ -164,7 +195,12 @@ class InspectSession:
         return box.get("ret")
 
     def close(self) -> None:
+        self.closed = True
         self._queue.put((None, None))
+
+    @property
+    def idle_seconds(self) -> float:
+        return time.monotonic() - self.last_used
 
     # ---- операции ----
     def state(self) -> dict[str, Any]:
@@ -246,15 +282,34 @@ class InspectSession:
         return result
 
 
-def inject_picker(html: str, script: str, sid: str = "", revision: int = 1) -> str:
+def new_nonce() -> str:
+    """Одноразовый nonce для CSP зеркала."""
+    return secrets.token_urlsafe(12)
+
+
+def mirror_csp(nonce: str) -> str:
+    """CSP зеркала: наш скрипт по nonce, всё остальное — только показать."""
+    return ("default-src 'none'; "
+            f"script-src 'nonce-{nonce}'; "
+            "img-src * data: blob:; style-src * 'unsafe-inline'; font-src * data:; "
+            "media-src *; frame-src 'none'; object-src 'none'; form-action 'none'; "
+            "connect-src 'none'")
+
+
+def inject_picker(html: str, script: str, sid: str = "", revision: int = 1,
+                  nonce: str = "") -> str:
     """Дописать в зеркало скрипт подсветки и выбора элементов.
 
     Код вставляется текстом, а не ссылкой: в зеркале стоит `<base href>` сайта,
     поэтому путь вида `/static/picker.js` уехал бы на чужой origin и не
-    загрузился.
+    загрузился. `nonce` совпадает с CSP ответа — только этот скрипт и
+    выполняется.
     """
-    tag = (f'<script data-sid="{sid}" data-revision="{revision}">\n'
-           f'{script}\n</script>')
+    attributes = (f' data-sid="{html_escape.escape(sid, quote=True)}"'
+                  f' data-revision="{int(revision)}"')
+    if nonce:
+        attributes += f' nonce="{html_escape.escape(nonce, quote=True)}"'
+    tag = f"<script{attributes}>\n{script}\n</script>"
     index = html.lower().rfind("</body>")
     if index == -1:
         return html + tag

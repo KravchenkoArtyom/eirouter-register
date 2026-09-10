@@ -16,8 +16,10 @@ export const state = {
   environment: {},
   job: null,
   logOffset: 0,
-  poll: null,
+  poll: null,        // запасной опрос по таймеру
+  stream: null,      // EventSource с потоком состояния запуска
   captchaSeq: 0,
+  dropped: 0,     // сколько строк лога обрезано на сервере
   inspect: { sid: null, mode: 'mirror', element: null },
   buffer: []
 };

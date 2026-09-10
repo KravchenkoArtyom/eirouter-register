@@ -1,4 +1,9 @@
-"""API прокси: список, файл, ротация и проверка связи."""
+"""API прокси: список, файл, ротация и проверка связи.
+
+Строки прокси содержат логины и пароли, поэтому сам текст файла отдаётся
+только по явному запросу (`?text=1` — когда человек открыл редактор списка);
+в остальных ответах адреса маскируются `redact_proxy`.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -8,7 +13,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 
 from core.proxy_pool import (ROTATIONS, ROTATION_LABELS, load_list, parse_lines,
-                             playwright_proxy, redact_proxy, save_list)
+                             is_socks, playwright_proxy, redact_proxy, save_list)
 from webui.settings import PROXIES_FILE
 
 router = APIRouter(tags=["proxies"])
@@ -17,21 +22,25 @@ CHECK_URL = "https://api.ipify.org?format=json"
 CHECK_LIMIT = 40
 
 
-def _state(text: str | None = None) -> dict[str, Any]:
+def _state(text: str | None = None, include_text: bool = True) -> dict[str, Any]:
     body = PROXIES_FILE.read_text(encoding="utf-8-sig") if PROXIES_FILE.exists() else ""
     if text is not None:
         body = text
     proxies, errors = parse_lines(body)
     return {"exists": PROXIES_FILE.exists(), "file": PROXIES_FILE.name,
-            "count": len(proxies), "text": body,
+            "count": len(proxies), "text": body if include_text else "",
+            "has_text": bool(body.strip()),
             "items": [redact_proxy(proxy) for proxy in proxies], "errors": errors,
             "rotations": [{"id": key, "label": ROTATION_LABELS[key]} for key in ROTATIONS]}
 
 
 @router.get("/api/proxies")
-def api_proxies() -> dict[str, Any]:
-    """Текущий список: адреса без пароля, ошибки строк и режимы ротации."""
-    return _state()
+def api_proxies(text: int = 0) -> dict[str, Any]:
+    """Текущий список: адреса без пароля, ошибки строк и режимы ротации.
+
+    `?text=1` добавляет сам текст файла — это нужно только редактору списка.
+    """
+    return _state(include_text=bool(text))
 
 
 @router.put("/api/proxies")
@@ -56,7 +65,7 @@ def api_save_proxies(payload: dict[str, Any]) -> dict[str, Any]:
 def api_clear_proxies() -> dict[str, Any]:
     if PROXIES_FILE.exists():
         try:
-            PROXIES_FILE.write_text("", encoding="utf-8")
+            save_list(PROXIES_FILE, [])
         except OSError as error:
             raise HTTPException(500, str(error))
     return {"ok": True, "count": 0}
@@ -64,6 +73,13 @@ def api_clear_proxies() -> dict[str, Any]:
 
 async def _check_one(proxy: str, timeout: float) -> dict[str, Any]:
     label = redact_proxy(proxy)
+    if is_socks(proxy):
+        try:
+            import socksio  # noqa: F401  (httpx[socks])
+        except ImportError:
+            return {"proxy": label, "ok": False,
+                    "error": "socks5 не проверить: поставьте httpx[socks]. "
+                             "В браузере такой адрес всё равно работает"}
     settings = playwright_proxy(proxy)
     url = settings["server"]
     if settings.get("username"):

@@ -158,31 +158,92 @@ function renderProxyState(job) {
     + '</table>';
 }
 
-/* ---------- опрос запуска ---------- */
+/* ---------- состояние запуска ---------- */
+
+/* Отрисовать очередной снимок запуска: лог, прогресс, капча, прокси. */
+function applyJob(job) {
+  if (!job) return;
+  if (typeof job.next_offset === 'number') state.logOffset = job.next_offset;
+  if (job.dropped && job.dropped !== state.dropped) {
+    state.dropped = job.dropped;
+    logLine(`[webui] Ранние строки лога обрезаны (${job.dropped}); `
+      + `полный лог — в logs/runs/${job.log_file || ''}`);
+  }
+  (job.logs || []).forEach(logLine);
+  const done = job.done + job.failed + job.skipped;
+  $('runProgressBar').style.width = Math.round(done / Math.max(1, job.count) * 100) + '%';
+  const pause = job.pause_left ? `, пауза ${job.pause_left} с` : '';
+  const status = STATUS_TEXT[job.status] || job.status;
+  const workers = job.workers > 1 ? `, в ${job.workers} потока` : '';
+  $('runStatus').textContent = `${job.scenario}: готово ${job.done}, неудач ${job.failed}, `
+    + `пропущено ${job.skipped} из ${job.count}${workers} — ${status}${pause}`;
+  renderCaptcha(job);
+  renderNotices(job.notices);
+  renderProxyState(job);
+  if (job.status !== 'running') finishRun();
+}
+
+/* Запуск закончился: вернуть кнопки в исходное состояние и закрыть подписки. */
+function finishRun() {
+  stopWatch();
+  $('btnStart').disabled = false;
+  $('btnStop').disabled = true;
+  $('captchaBar').hidden = true;
+  onEnvironmentChange();
+}
+
+/* Отключить и поток событий, и опрос по таймеру. */
+function stopWatch() {
+  if (state.stream) {
+    state.stream.close();
+    state.stream = null;
+  }
+  if (state.poll) {
+    clearInterval(state.poll);
+    state.poll = null;
+  }
+}
+
+/* Опрос по таймеру — запас на случай, если поток событий не работает. */
 async function pollRun() {
   if (!state.job) return;
   try {
-    const job = await api('/api/runs/' + state.job + '?offset=' + state.logOffset);
-    state.logOffset = job.next_offset;
-    job.logs.forEach(logLine);
-    const done = job.done + job.failed + job.skipped;
-    $('runProgressBar').style.width = Math.round(done / Math.max(1, job.count) * 100) + '%';
-    const pause = job.pause_left ? `, пауза ${job.pause_left} с` : '';
-    const status = STATUS_TEXT[job.status] || job.status;
-    $('runStatus').textContent = `${job.scenario}: готово ${job.done}, неудач ${job.failed}, `
-      + `пропущено ${job.skipped} из ${job.count} — ${status}${pause}`;
-    renderCaptcha(job);
-    renderNotices(job.notices);
-    renderProxyState(job);
-    if (job.status !== 'running') {
-      clearInterval(state.poll);
-      state.poll = null;
-      $('btnStart').disabled = false;
-      $('btnStop').disabled = true;
-      $('captchaBar').hidden = true;
-      onEnvironmentChange();
-    }
+    applyJob(await api('/api/runs/' + state.job + '?offset=' + state.logOffset));
   } catch (error) { /* сеть моргнула — попробуем на следующем такте */ }
+}
+
+function startPolling() {
+  if (state.poll) return;
+  state.poll = setInterval(pollRun, 1000);
+  pollRun();
+}
+
+/* Основной способ следить за запуском: сервер сам присылает изменения. */
+function watchRun() {
+  stopWatch();
+  if (typeof EventSource !== 'function') {
+    startPolling();
+    return;
+  }
+  let alive = false;
+  const stream = new EventSource(`/api/runs/${state.job}/stream?offset=${state.logOffset}`);
+  state.stream = stream;
+  stream.onmessage = (event) => {
+    alive = true;
+    try {
+      applyJob(JSON.parse(event.data));
+    } catch (error) { /* мусор в кадре — подождём следующий */ }
+  };
+  stream.onerror = () => {
+    stream.close();
+    if (state.stream !== stream) return;
+    state.stream = null;
+    /* Поток мог закрыться и потому, что запуск закончился — сверимся опросом. */
+    if (alive) pollRun();
+    startPolling();
+  };
+  /* Если поток так и не заговорил, через пару секунд берём опрос. */
+  setTimeout(() => { if (!alive && state.stream === stream) startPolling(); }, 3000);
 }
 
 async function startRun() {
@@ -195,6 +256,7 @@ async function startRun() {
     browser: $('runBrowser').value,
     rotation: $('runRotation').value,
     proxy: $('runProxyValue').value.trim(),
+    workers: number($('runWorkers').value, 1),
     delays: settingsPayload().delays,
     captcha: settingsPayload().captcha
   };
@@ -203,14 +265,13 @@ async function startRun() {
     state.job = result.id;
     state.logOffset = 0;
     state.captchaSeq = 0;
+    state.dropped = 0;
     $('log').innerHTML = '';
     $('notices').innerHTML = '';
     $('btnStart').disabled = true;
     $('btnStop').disabled = false;
     logLine('[webui] Запуск ' + state.job);
-    clearInterval(state.poll);
-    state.poll = setInterval(pollRun, 1000);
-    pollRun();
+    watchRun();
   } catch (error) {
     toast(error.message, 'err');
   }

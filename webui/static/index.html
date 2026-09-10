@@ -99,6 +99,11 @@
             <input type="number" id="runCount" value="1" min="1" max="1000">
           </div>
           <div class="field">
+            <label for="runWorkers">Одновременно</label>
+            <input type="number" id="runWorkers" value="1" min="1" max="4"
+                   title="Сколько аккаунтов регистрировать параллельно">
+          </div>
+          <div class="field">
             <label for="runMail">Почта</label>
             <select id="runMail"></select>
           </div>
@@ -263,8 +268,12 @@
       <div class="actions">
         <button id="btnSaveScenario" class="primary small">Сохранить сценарий</button>
         <button id="btnValidate" class="quiet small">Проверить</button>
+        <button id="btnDryRun" class="quiet small"
+                title="Открыть страницу и проверить селекторы шагов, не создавая аккаунт">
+          Сухой прогон</button>
         <span class="hint" id="edDirty"></span>
       </div>
+      <div id="dryRunResult"></div>
     </article>
 
     <article class="card">
@@ -489,7 +498,10 @@
       <div class="inspector-layout">
         <div class="stage">
           <div class="stage-bar"><span id="inspectUrl" class="mono"></span><span id="inspectHover" class="mono muted"></span></div>
-          <iframe id="mirror" title="Зеркало страницы"></iframe>
+          <!-- sandbox без allow-same-origin: зеркало чужого сайта не должно
+               иметь доступа к API панели, даже если в нём что-то выполнится. -->
+          <iframe id="mirror" title="Зеркало страницы" sandbox="allow-scripts"
+                  referrerpolicy="no-referrer"></iframe>
           <img id="shot" alt="Кадр страницы" hidden>
         </div>
         <aside class="side">
@@ -580,6 +592,10 @@
       <div class="card-head">
         <h2>Аккаунты</h2>
         <button id="btnAccounts" class="quiet small">Обновить</button>
+        <input type="search" id="accountFilter" class="grow"
+               placeholder="Поиск: почта, сценарий, статус">
+        <a id="btnAccountsCsv" class="button quiet small" href="/api/accounts/export.csv"
+           download="accounts.csv">Выгрузить CSV</a>
       </div>
       <div id="accounts"><p class="hint">Нажмите «Обновить».</p></div>
     </article>

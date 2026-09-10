@@ -1,5 +1,4 @@
 import asyncio
-import json
 import uuid
 from pathlib import Path
 from unittest.mock import AsyncMock
@@ -75,6 +74,7 @@ def test_batch_selects_proxy_per_account(tmp_path: Path) -> None:
     ]
 
 
+@pytest.mark.chrome
 def test_chrome_profile_persists_session_and_settings(tmp_path: Path) -> None:
     async def run() -> None:
         profiles = BrowserProfiles(tmp_path, locale="en-GB", timezone="Europe/London", detect_location=False)

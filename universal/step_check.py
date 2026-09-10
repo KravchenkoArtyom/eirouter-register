@@ -6,7 +6,8 @@
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable
+from typing import Any
+from collections.abc import Callable, Iterable
 
 from universal.actions import ACTIONS, DOM_OPERATIONS, needs_selector, required_fields
 

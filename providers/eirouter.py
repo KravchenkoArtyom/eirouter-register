@@ -265,18 +265,14 @@ class EirouterProvider(BaseProvider):
             finally:
                 await self.profiles.close(context)
 
-    async def fetch_quota(self, account: dict[str, object]) -> None:
-        return None
-
     def get_headers(self, account: dict[str, object]) -> dict[str, str]:
         return {"Authorization": f"Bearer {account.get('api_key') or account.get('token') or ''}"}
 
-    def detect_quota_limit(self, status: int, body: bytes | str) -> str | None:
-        if status in (401, 403):
-            return "auth"
-        if status in (402, 429):
-            return "rate"
-        return None
+    def close(self) -> None:
+        """Остановить писаря хранилища (вызывается по завершении работы)."""
+        if self._store is not None:
+            self._store.close()
+            self._store = None
 
 
 def positive_count(value: str) -> int:
@@ -319,24 +315,29 @@ async def register_accounts(provider: EirouterProvider, count: int,
     completed = 0
     log(f"[eirouter] Requested: {count}. Mail: {provider.mail_service}. Output: {provider.output}")
     log("[eirouter] Complete Cloudflare in the browser if prompted. Ctrl+C stops the queue.")
-    for index in range(1, count + 1):
-        log(f"[eirouter] Account {index}/{count}")
-        try:
-            if proxies:
-                proxy = proxies[(index - 1) % len(proxies)]
-                account = await provider.register_step(log, proxy=proxy)
-            else:
-                account = await provider.register_step(log)
-        except (RuntimeError, TimeoutError, PlaywrightError, httpx.HTTPError, OSError, ValueError) as error:
-            # External errors may contain request data; report the type, not secrets.
-            log(f"[eirouter] Stopped on account {index}: {type(error).__name__}. "
-                "Check the last step above; saved credentials are retained.")
-            break
-        if not account.get("confirmed") or not account.get("api_key"):
-            log("[eirouter] Stopped: registration or key capture is incomplete. "
-                "Use --resume EMAIL for a confirmed account without a key.")
-            break
-        completed += 1
+    try:
+        for index in range(1, count + 1):
+            log(f"[eirouter] Account {index}/{count}")
+            try:
+                if proxies:
+                    proxy = proxies[(index - 1) % len(proxies)]
+                    account = await provider.register_step(log, proxy=proxy)
+                else:
+                    account = await provider.register_step(log)
+            except (RuntimeError, TimeoutError, PlaywrightError, httpx.HTTPError, OSError,
+                    ValueError) as error:
+                # External errors may contain request data; report the type, not secrets.
+                log(f"[eirouter] Stopped on account {index}: {type(error).__name__}. "
+                    "Check the last step above; saved credentials are retained.")
+                break
+            if not account.get("confirmed") or not account.get("api_key"):
+                log("[eirouter] Stopped: registration or key capture is incomplete. "
+                    "Use --resume EMAIL for a confirmed account without a key.")
+                break
+            completed += 1
+    finally:
+        # Writer thread flushes pending statuses before the process exits.
+        provider.close()
     log(f"[eirouter] Complete accounts with API keys: {completed}/{count}. File: {provider.output}")
     return 0 if completed == count else 1
 

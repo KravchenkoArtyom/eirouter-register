@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
@@ -103,17 +103,7 @@ class ExtractSessionAction(BaseModel):
 
 
 Step = Annotated[
-    Union[
-        NavigateAction,
-        WaitAction,
-        WaitForSelectorAction,
-        ClickAction,
-        TypeAction,
-        CheckAction,
-        WaitEmailAction,
-        SolveCaptchaAction,
-        ExtractSessionAction,
-    ],
+    NavigateAction | WaitAction | WaitForSelectorAction | ClickAction | TypeAction | CheckAction | WaitEmailAction | SolveCaptchaAction | ExtractSessionAction,
     Field(discriminator="action"),
 ]
 

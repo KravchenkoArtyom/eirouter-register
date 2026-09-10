@@ -7,6 +7,7 @@ eirouter-register/
 │  ├─ server.py          сборка приложения (роутеры + статика)
 │  ├─ settings.py        пути и константы
 │  ├─ config.py          настройки панели (`webui.local.json`)
+│  ├─ security.py        страж по `Host`, токен доступа, защитные заголовки
 │  ├─ inspect_session.py страница сайта в headless-браузере, зеркало DOM
 │  ├─ element_buffer.py  временное хранилище снятых элементов
 │  ├─ api/               HTTP-эндпоинты: scenarios, runs, mail, proxies,
@@ -33,11 +34,16 @@ eirouter-register/
 ├─ universal_scenarios/  сценарии сайтов (JSON), `_trash/` — удалённые
 ├─ mail_services/        свои почтовые сервисы (JSON), `_trash/` — удалённые
 ├─ tools/                консольные инструменты (редактор сценариев,
-│                        отрисовка схемы `make_diagram.py`)
-├─ legacy/               устаревший Tkinter-интерфейс
+│                        синхронизация схемы `make_diagram.py`)
 ├─ tests/                тесты (pytest)
+├─ logs/                 не в репозитории: `runs/` — логи и итоги запусков,
+│                        `failures/` — снимки упавших аккаунтов
+├─ .github/workflows/    проверка кода и тесты на каждый push
 └─ docs/                 документация, `images/` — картинки
 ```
+
+В корне лежат `pyproject.toml` (версия, правила `ruff`, настройки `pytest`),
+`requirements.txt` и `requirements-dev.txt`, `LICENSE` (MIT).
 
 ## Точки входа
 
@@ -49,7 +55,8 @@ eirouter-register/
 | Регистратор eirouter | `scripts\register_eirouter.bat` или `py -3 -m providers.eirouter --interactive` |
 | Регистратор wisdomsatan | `scripts\register_wisdomsatan.bat` |
 | Обновиться из GitHub | `scripts\sync.bat` |
-| Тесты | `py -3 -m pytest -q` |
+| Тесты | `py -3 -m pytest` |
+| Проверка кода | `py -3 -m ruff check .` |
 
 ## Что переехало
 
@@ -58,7 +65,7 @@ eirouter-register/
 | `webui.py`, `webui.html` | `webui/` (сервер, API, статика) |
 | `universal_autoregister.py` | `universal/` (`runner.py`, `cli.py`, `mail.py`, `scenarios.py`, `actions.py`) |
 | `universal_scenario_editor.py` | `tools/scenario_editor.py` |
-| `universal_autoregister_gui.py` | `legacy/universal_autoregister_gui.py` |
+| `universal_autoregister_gui.py` | удалён: панель (`webui/`) умеет всё то же |
 | `*.bat` в корне | `scripts/*.bat` |
 | `core/test_*.py` | `tests/` |
 | `README.md` (про eirouter), `UNIVERSAL_AUTOREGISTER.md` | `docs/` |
@@ -66,4 +73,5 @@ eirouter-register/
 Данные и секреты остались на месте и по-прежнему не попадают в репозиторий:
 `universal_accounts.json`, `eirouter_accounts.json`, `proxies.txt`,
 `adspower.local.json`, `webui.local.json`, `profiles/`,
-`universal_profiles/`, `logs/`, `webui_elements.json`.
+`universal_profiles/`, `logs/`, `webui_elements.json`. Файл аккаунтов и
+`proxies.txt` создаются с правами «только владелец».

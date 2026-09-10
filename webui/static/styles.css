@@ -146,7 +146,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--t
 .checkbox input { accent-color: var(--accent); }
 
 /* ---- кнопки ---- */
-button {
+/* a.button — ссылка, которая выглядит кнопкой (выгрузка CSV). */
+button, a.button {
   background: var(--accent);
   color: var(--accent-text);
   border: 1px solid var(--accent);
@@ -155,11 +156,18 @@ button {
   font: inherit;
   cursor: pointer;
 }
-button:hover { opacity: .88; }
+button:hover, a.button:hover { opacity: .88; }
 button:disabled { opacity: .4; cursor: default; }
-button.quiet { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
-button.quiet:hover { background: var(--surface-sunken); opacity: 1; }
-button.small { padding: 5px 10px; font-size: 13px; }
+button.quiet, a.button.quiet { background: var(--surface); color: var(--text); border-color: var(--border-strong); }
+button.quiet:hover, a.button.quiet:hover { background: var(--surface-sunken); opacity: 1; }
+button.small, a.button.small { padding: 5px 10px; font-size: 13px; }
+a.button { text-decoration: none; display: inline-block; line-height: 1.35; }
+
+/* Сухой прогон: строки отчёта по шагам. */
+.dry-run { margin-top: 10px; font-size: 13px; }
+.dry-run .row { display: flex; gap: 8px; padding: 3px 0; align-items: baseline; }
+.dry-run .row.bad { color: var(--err); }
+.dry-run .where { color: var(--text-muted); min-width: 130px; }
 
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 12px 0 0; }
 .actions.tight { margin: 8px 0 0; }
