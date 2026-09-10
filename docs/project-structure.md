@@ -1,7 +1,7 @@
 # Структура проекта
 
 ```
-eirouter-register/
+universal-autoregister/
 ├─ scripts/              Windows-лаунчеры (.bat) — точки входа для человека
 ├─ webui/                панель в браузере: FastAPI + статика
 │  ├─ server.py          сборка приложения (роутеры + статика)
@@ -27,7 +27,8 @@ eirouter-register/
 │  ├─ step_check.py      общая проверка шагов
 │  ├─ scenarios.py       файлы сценариев: чтение, запись, валидация
 │  └─ cli.py             интерактивный запуск в консоли
-├─ providers/            регистраторы конкретных сервисов (eirouter, wisdomsatan)
+├─ providers/            регистраторы конкретных сервисов на NewAPI
+│                        (eirouter, wisdomsatan) — там же захват ключа
 ├─ core/                 инфраструктура: браузерные профили, AdsPower, прокси,
 │                        хранилище аккаунтов, логи, tmail-клиент
 ├─ recipes/              рецепты шагов для провайдеров

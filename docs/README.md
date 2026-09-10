@@ -15,5 +15,5 @@
 - [proxies.md](proxies.md) — список прокси, проверка связи, правила ротации.
 - [universal-registrar.md](universal-registrar.md) — запуск регистрации,
   прокси, браузерные профили, файлы результатов.
-- [eirouter.md](eirouter.md) — отдельные регистраторы eirouter и wisdomsatan,
-  AdsPower, профили Chrome.
+- [newapi-services.md](newapi-services.md) — сервисы на NewAPI: готовые
+  регистраторы eirouter и wisdomsatan, захват ключа, AdsPower, профили Chrome.

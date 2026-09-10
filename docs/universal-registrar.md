@@ -45,7 +45,7 @@ tmail.wibucrypto.pro, `mail.tm` — по API. Оба сервиса умеют �
 `adspower.local.json` с `api_key`) на каждый аккаунт создаётся отдельный
 профиль, который удаляется после успешного сохранения; без него используется
 персистентный профиль Chrome. Подробности про AdsPower и отпечатки —
-в [eirouter.md](eirouter.md).
+в [newapi-services.md](newapi-services.md).
 
 ## Результат
 

@@ -2,9 +2,9 @@
 # программа запускается из папки (`py -3 -m webui`), а здесь собраны версия,
 # правила проверки кода и настройки тестов, чтобы они были в одном месте.
 [project]
-name = "eirouter-register"
+name = "universal-autoregister"
 version = "1.0.0"
-description = "Автономный регистратор аккаунтов: панель, сценарии, свой браузер"
+description = "Универсальный регистратор аккаунтов: панель, сценарии сайтов, сервисы на NewAPI"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
