@@ -2,7 +2,8 @@
 
 ```
 universal-autoregister/
-├─ scripts/              Windows-лаунчеры (.bat) — точки входа для человека
+├─ scripts/              Windows-лаунчеры (.bat) — точки входа для человека,
+│                        `install.bat` — установка и обновление одной кнопкой
 ├─ webui/                панель в браузере: FastAPI + статика
 │  ├─ server.py          сборка приложения (роутеры + статика)
 │  ├─ settings.py        пути и константы
@@ -55,7 +56,8 @@ universal-autoregister/
 | Правка сценария в консоли | `scripts\edit_universal_scenario.bat` или `py -3 -m tools.scenario_editor` |
 | Регистратор eirouter | `scripts\register_eirouter.bat` или `py -3 -m providers.eirouter --interactive` |
 | Регистратор wisdomsatan | `scripts\register_wisdomsatan.bat` |
-| Обновиться из GitHub | `scripts\sync.bat` |
+| Установка и обновление | `scripts\install.bat` (клонирует или обновляет, ставит зависимости и браузеры) |
+| Обновиться из GitHub | `scripts\sync.bat` (то же самое внутри проекта) |
 | Тесты | `py -3 -m pytest` |
 | Проверка кода | `py -3 -m ruff check .` |
 

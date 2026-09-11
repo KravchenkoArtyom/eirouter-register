@@ -15,7 +15,17 @@
 
 ## Быстрый старт
 
+Одним файлом: скачайте [`scripts/install.bat`](scripts/install.bat), положите
+в любую папку и запустите. Он склонирует проект (или обновит уже
+склонированный), создаст `.venv`, поставит зависимости, докачает браузеры и
+прогонит тесты. Быстрее — `install.bat --skip-tests`. Дальше этот же файл
+служит обновлением: `scripts\sync.bat` внутри проекта делает то же самое.
+
+Вручную, если удобнее по шагам:
+
 ```powershell
+git clone https://github.com/KravchenkoArtyom/universal-autoregister.git
+cd universal-autoregister
 py -3 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements.txt
 .venv\Scripts\python.exe -m playwright install chromium
@@ -27,8 +37,9 @@ py -3 -m venv .venv
 задать своим (`set WEBUI_TOKEN=…`) или выключить на время отладки
 (`scripts\webui.bat --no-token`).
 
-Нужен Python 3.11+ и AdsPower либо системный Chrome. Обновиться из GitHub —
-`scripts\sync.bat`.
+Нужен Python 3.11+ и AdsPower либо системный Chrome (`playwright install
+chrome` ставит его сам). Обновиться из GitHub — `scripts\sync.bat`: он
+подтягивает изменения и доставляет новые зависимости.
 
 ## Что умеет панель
 
@@ -95,6 +106,7 @@ py -3 -m venv .venv
 | Правка сценария в консоли | `scripts\edit_universal_scenario.bat` |
 | Регистратор eirouter | `scripts\register_eirouter.bat` |
 | Регистратор wisdomsatan | `scripts\register_wisdomsatan.bat` |
+| Установка и обновление | `scripts\install.bat` или `scripts\sync.bat` |
 | Тесты | `py -3 -m pytest` |
 | Проверка кода | `py -3 -m ruff check .` |
 
